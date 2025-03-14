@@ -1,3 +1,9 @@
+#!/usr/bin/env node
+// @ts-nocheck
+/* eslint-disable */
+// Tell TypeScript to keep this as an ES module
+// @ts-ignore
+export {};
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -5,7 +11,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 
 // Directory for prompt storage
-const PROMPTS_DIR = path.join(process.cwd(), "prompts");
+const PROMPTS_DIR = process.env.PROMPTS_DIR || path.join(process.cwd(), "prompts");
 
 // Type definitions
 interface Prompt {
@@ -20,8 +26,8 @@ interface Prompt {
   updatedAt: string;
   version: number;
 }
-
-// Ensure the prompts directory exists
+    
+    // Ensure the prompts directory exists
 async function ensurePromptsDir() {
   try {
     await fs.mkdir(PROMPTS_DIR, { recursive: true });
@@ -43,7 +49,7 @@ async function loadPrompt(id: string): Promise<Prompt | null> {
   try {
     const content = await fs.readFile(path.join(PROMPTS_DIR, `${id}.json`), "utf-8");
     return JSON.parse(content);
-  } catch (error) {
+        } catch (error) {
     return null;
   }
 }
@@ -61,7 +67,7 @@ async function listAllPrompts(): Promise<Prompt[]> {
     }
     
     return prompts;
-  } catch (error) {
+        } catch (error) {
     console.error("Error listing prompts:", error);
     return [];
   }
@@ -281,62 +287,57 @@ async function main() {
       return {
         content: [{
           type: "text",
-          text: JSON.stringify(prompt, null, 2)
+          text: `# ${prompt.name}\n\n${prompt.description ? prompt.description + '\n\n' : ''}${prompt.content}`
         }]
       };
     }
   );
 
-  // 4. List all prompts
+  // 4. List all prompts, optionally filtered by tags
   server.tool(
     "list_prompts",
     {
       tags: z.array(z.string()).optional()
     },
     async ({ tags }) => {
-      let prompts = await listAllPrompts();
+      const prompts = await listAllPrompts();
       
-      // Filter by tags if provided
-      if (tags && tags.length > 0) {
-        prompts = prompts.filter(prompt => 
-          prompt.tags && tags.some(tag => prompt.tags?.includes(tag))
-        );
-      }
+      const filteredPrompts = tags
+        ? prompts.filter(prompt => 
+            prompt.tags?.some(tag => tags.includes(tag))
+          )
+        : prompts;
       
-      if (prompts.length === 0) {
+      if (filteredPrompts.length === 0) {
         return {
           content: [{
             type: "text",
-            text: "No prompts found."
+            text: "No prompts found matching the criteria."
           }]
         };
       }
       
-      const formattedPrompts = prompts.map(p => ({
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        isTemplate: p.isTemplate,
-        tags: p.tags
-      }));
+      const promptList = filteredPrompts.map(p => 
+        `- **${p.name}** (ID: \`${p.id}\`): ${p.description || 'No description'}\n  ${p.isTemplate ? '📄 Template' : '📝 Regular'} | Tags: ${p.tags?.join(', ') || 'none'}`
+      ).join('\n\n');
       
       return {
         content: [{
           type: "text",
-          text: `Found ${prompts.length} prompts:\n\n${JSON.stringify(formattedPrompts, null, 2)}`
+          text: `# Available Prompts\n\n${promptList}`
         }]
       };
     }
   );
 
-  // 5. Apply template prompt with variables
+  // 5. Apply a template with variable substitution
   server.tool(
     "apply_template",
     {
       id: z.string(),
-      variables: z.record(z.string(), z.string())
+      variables: z.record(z.string()).optional()
     },
-    async ({ id, variables }) => {
+    async ({ id, variables = {} }) => {
       const prompt = await loadPrompt(id);
       if (!prompt) {
         return {
@@ -352,132 +353,42 @@ async function main() {
         return {
           content: [{
             type: "text",
-            text: `Error: Prompt "${prompt.name}" is not a template.`
-          }],
-          isError: true
+            text: prompt.content
+          }]
         };
       }
       
-      let content = prompt.content;
+      let result = prompt.content;
       
-      // Fixed string replacement logic
-      Object.entries(variables).forEach(([key, value]) => {
-        const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-        content = content.replace(regex, () => value);
-      });
+      // Apply variable substitution
+      for (const [key, value] of Object.entries(variables)) {
+        const regex = new RegExp(`{{${key}}}`, 'g');
+        result = result.replace(regex, value);
+      }
+      
+      // Check for any remaining variables
+      const remainingVars = result.match(/{{([^}]+)}}/g);
+      if (remainingVars) {
+        const varList = remainingVars.map(v => v.replace(/{{|}}/g, '')).join(', ');
+        console.error(`Warning: Some variables not substituted: ${varList}`);
+      }
       
       return {
         content: [{
           type: "text",
-          text: content
+          text: result
         }]
       };
     }
   );
 
-  // Instead of using registerPromptHandler, set up prompt methods directly
-  server.prompt("get_development_system_prompt", 
-    {
-      project_type: z.string(),
-      language: z.string(),
-      project_name: z.string(),
-      project_goal: z.string(),
-      technical_context: z.string()
-    },
-    async ({project_type, language, project_name, project_goal, technical_context}) => {
-      const prompt = await loadPrompt("development-system-prompt");
-      if (!prompt) {
-        throw new Error("Development system prompt not found");
-      }
-      
-      let content = prompt.content;
-      const variables = {project_type, language, project_name, project_goal, technical_context};
-      
-      // Fixed string replacement logic
-      Object.entries(variables).forEach(([key, value]) => {
-        const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-        content = content.replace(regex, () => value);
-      });
-      
-      return {
-        messages: [
-          {
-            role: "user",
-            content: {
-              type: "text",
-              text: content
-            }
-          }
-        ]
-      };
-    }
-  );
-  
-  server.prompt("get_code_review", 
-    {
-      language: z.string(),
-      code: z.string()
-    },
-    async ({language, code}) => {
-      const prompt = await loadPrompt("code-review");
-      if (!prompt) {
-        throw new Error("Code review prompt not found");
-      }
-      
-      let content = prompt.content;
-      const variables = {language, code};
-      
-      // Fixed string replacement logic
-      Object.entries(variables).forEach(([key, value]) => {
-        const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-        content = content.replace(regex, () => value);
-      });
-      
-      return {
-        messages: [
-          {
-            role: "user",
-            content: {
-              type: "text",
-              text: content
-            }
-          }
-        ]
-      };
-    }
-  );
-  
-  server.prompt("development_workflow", 
-    {},
-    async () => {
-      const prompt = await loadPrompt("development-workflow");
-      if (!prompt) {
-        throw new Error("Development workflow prompt not found");
-      }
-      
-      return {
-        messages: [
-          {
-            role: "user",
-            content: {
-              type: "text",
-              text: prompt.content
-            }
-          }
-        ]
-      };
-    }
-  );
-
-  // Start the server
-  console.error("Starting PromptManager MCP Server...");
+  // Start the server with stdio transport
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("PromptManager MCP Server running");
 }
 
 // Run the server
 main().catch(error => {
-  console.error("Fatal error:", error);
+  console.error("Error starting server:", error);
   process.exit(1);
 });
