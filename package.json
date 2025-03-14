@@ -1,6 +1,6 @@
 {
   "name": "@sparesparrow/mcp-prompts",
-  "version": "3.0.0",
+  "version": "1.2.21",
   "description": "An MCP server for managing and providing prompts and prompt templates",
   "type": "module",
   "bin": {
