@@ -9,69 +9,42 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import * as fs from "fs/promises";
 import * as path from "path";
+import { createStorageAdapter } from "./adapters/index.js";
+import { Prompt, ServerConfig, StorageAdapter } from "./interfaces/index.js";
 
-// Directory for prompt storage
-const PROMPTS_DIR = process.env.PROMPTS_DIR || path.join(process.cwd(), "prompts");
-
-// Type definitions
-interface Prompt {
-  id: string;
-  name: string;
-  description?: string;
-  content: string;
-  isTemplate: boolean;
-  variables?: string[];
-  tags?: string[];
-  createdAt: string;
-  updatedAt: string;
-  version: number;
-}
-    
-    // Ensure the prompts directory exists
-async function ensurePromptsDir() {
-  try {
-    await fs.mkdir(PROMPTS_DIR, { recursive: true });
-    console.error(`Prompts directory created: ${PROMPTS_DIR}`);
-  } catch (error) {
-    console.error("Error creating prompts directory:", error);
-  }
-}
-
-// Storage operations
-async function savePrompt(prompt: Prompt): Promise<void> {
-  await fs.writeFile(
-    path.join(PROMPTS_DIR, `${prompt.id}.json`),
-    JSON.stringify(prompt, null, 2)
-  );
-}
-
-async function loadPrompt(id: string): Promise<Prompt | null> {
-  try {
-    const content = await fs.readFile(path.join(PROMPTS_DIR, `${id}.json`), "utf-8");
-    return JSON.parse(content);
-        } catch (error) {
-    return null;
-  }
-}
-
-async function listAllPrompts(): Promise<Prompt[]> {
-  try {
-    const files = await fs.readdir(PROMPTS_DIR);
-    const prompts: Prompt[] = [];
-    
-    for (const file of files) {
-      if (file.endsWith(".json")) {
-        const content = await fs.readFile(path.join(PROMPTS_DIR, file), "utf-8");
-        prompts.push(JSON.parse(content));
+// Configuration with defaults
+const DEFAULT_CONFIG: ServerConfig = {
+  name: "mcp-prompts",
+  version: "1.0.0",
+  storageType: "file",
+  promptsDir: process.env.PROMPTS_DIR || path.join(process.cwd(), "prompts"),
+  backupsDir: process.env.BACKUPS_DIR || path.join(process.cwd(), "backups"),
+  port: Number(process.env.PORT) || 3003,
+  logLevel: (process.env.LOG_LEVEL || "info") as "debug" | "info" | "warn" | "error",
+  httpServer: process.env.HTTP_SERVER === "true",
+  host: process.env.HOST || "0.0.0.0",
+  postgres: process.env.POSTGRES_CONNECTION_STRING 
+    ? {
+        connectionString: process.env.POSTGRES_CONNECTION_STRING,
+        host: "",
+        port: 5432,
+        database: "",
+        user: "",
+        password: "",
+        ssl: false
+      } 
+    : {
+        host: process.env.POSTGRES_HOST || "localhost",
+        port: Number(process.env.POSTGRES_PORT) || 5432,
+        database: process.env.POSTGRES_DATABASE || "mcp_prompts",
+        user: process.env.POSTGRES_USER || "postgres",
+        password: process.env.POSTGRES_PASSWORD || "postgres",
+        ssl: process.env.POSTGRES_SSL === "true"
       }
-    }
-    
-    return prompts;
-        } catch (error) {
-    console.error("Error listing prompts:", error);
-    return [];
-  }
-}
+};
+
+// Storage adapter instance
+let storageAdapter: StorageAdapter;
 
 // Default prompts to include when initializing
 const DEFAULT_PROMPTS: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt' | 'version'>[] = [
@@ -100,295 +73,256 @@ Technical context:
     tags: ["development", "system", "template"]
   },
   {
-    name: "Development Workflow",
-    description: "Standard workflow for installing dependencies, testing, documenting, and pushing changes",
-    content: `install dependencies, build, run, test, fix, document, commit, and push your changes. Because your environment is externally managed, we'll create and use a virtual environment:
-Create a virtual environment in the project directory.
-Upgrade pip (optional but recommended).
-Install the package in editable mode within the virtual environment.
-Run tests (e.g. using pytest).
-Document any changes (the README already provides documentation).
-Commit all changes and push to your Git repository.`,
-    isTemplate: false,
-    tags: ["development", "workflow", "python"]
-  },
-  {
-    name: "Code Review",
-    description: "A template for requesting code reviews",
-    content: `Please review the following code for:
-1. Bugs or logic errors
-2. Performance issues
-3. Security vulnerabilities
-4. Style/convention violations
-5. Opportunities for improvement
-
-Code to review:
-\`\`\`{{language}}
-{{code}}
-\`\`\``,
+    name: "Task List Helper",
+    description: "A basic prompt to help organize and prioritize tasks",
+    content: "Please create a prioritized task list based on the following requirements:\n\n{{requirements}}",
     isTemplate: true,
-    variables: ["language", "code"],
-    tags: ["development", "review", "template"]
+    variables: ["requirements"],
+    tags: ["productivity", "planning"]
   }
 ];
 
-// Function to initialize default prompts if none exist
+// Initialize default prompts
 async function initializeDefaultPrompts() {
-  const existingPrompts = await listAllPrompts();
-  
-  if (existingPrompts.length === 0) {
-    console.error("No prompts found, adding defaults...");
+  try {
+    console.error("Adding default prompts...");
+    const existingPrompts = await storageAdapter.listPrompts();
     
-    for (const promptTemplate of DEFAULT_PROMPTS) {
-      const id = promptTemplate.name.toLowerCase().replace(/\s+/g, "-");
-      const now = new Date().toISOString();
-      
-      const prompt: Prompt = {
-        ...promptTemplate,
-        id,
-        createdAt: now,
-        updatedAt: now,
-        version: 1
-      };
-      
-      await savePrompt(prompt);
-      console.error(`Added default prompt: ${prompt.name}`);
+    if (existingPrompts.length === 0) {
+      for (const promptData of DEFAULT_PROMPTS) {
+        await storageAdapter.savePrompt(promptData);
+      }
+      console.error(`Added ${DEFAULT_PROMPTS.length} default prompts`);
+    } else {
+      console.error(`Skipping default prompts, ${existingPrompts.length} prompts already exist`);
     }
+  } catch (error) {
+    console.error("Error initializing default prompts:", error);
   }
 }
 
-// Initialize the MCP server
-async function main() {
-  await ensurePromptsDir();
-  await initializeDefaultPrompts();
-  
-  const server = new McpServer({
-    name: "PromptManager",
-    version: "1.0.0"
+// Utility to apply template variables
+function applyTemplate(template: string, variables: Record<string, string>): string {
+  return template.replace(/\{\{([^}]+)\}\}/g, (match, variable) => {
+    return variables[variable.trim()] || match;
   });
+}
 
-  // Tool implementations
-  // 1. Add a new prompt
-  server.tool(
-    "add_prompt",
-    {
-      name: z.string(),
-      description: z.string().optional(),
-      content: z.string(),
-      isTemplate: z.boolean().default(false),
-      variables: z.array(z.string()).optional(),
-      tags: z.array(z.string()).optional()
-    },
-    async ({ name, description, content, isTemplate, variables, tags }) => {
-      const id = name.toLowerCase().replace(/\s+/g, "-");
-      
-      // Check if prompt already exists
-      const existingPrompt = await loadPrompt(id);
-      if (existingPrompt) {
-        return {
-          content: [{
-            type: "text",
-            text: `Error: A prompt with the name "${name}" already exists.`
-          }],
-          isError: true
-        };
+// Main function
+async function main() {
+  try {
+    console.error("Starting MCP Prompts Server...");
+    
+    // Create and connect to storage
+    storageAdapter = createStorageAdapter(DEFAULT_CONFIG);
+    await storageAdapter.connect();
+    
+    // Initialize default prompts
+    await initializeDefaultPrompts();
+    
+    // Create MCP server
+    const server = new McpServer(
+      {
+        name: DEFAULT_CONFIG.name,
+        version: DEFAULT_CONFIG.version,
+      },
+      {
+        tools: {
+          add_prompt: {
+            description: "Add a new prompt",
+            parameters: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                content: { type: "string" },
+                description: { type: "string", optional: true },
+                isTemplate: { type: "boolean", optional: true },
+                variables: { type: "array", items: { type: "string" }, optional: true },
+                tags: { type: "array", items: { type: "string" }, optional: true },
+              },
+              required: ["name", "content"],
+            },
+            handler: async (params) => {
+              const prompt = await storageAdapter.savePrompt({
+                name: params.name,
+                content: params.content,
+                description: params.description,
+                isTemplate: params.isTemplate || false,
+                variables: params.variables || [],
+                tags: params.tags || [],
+              });
+              
+              return {
+                type: "object",
+                object: prompt,
+              };
+            },
+          },
+          get_prompt: {
+            description: "Get a prompt by ID",
+            parameters: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+              },
+              required: ["id"],
+            },
+            handler: async (params) => {
+              try {
+                const prompt = await storageAdapter.getPrompt(params.id);
+                return {
+                  type: "object",
+                  object: prompt,
+                };
+              } catch (error) {
+                return {
+                  type: "error",
+                  error: `Prompt not found: ${params.id}`,
+                };
+              }
+            },
+          },
+          update_prompt: {
+            description: "Update a prompt",
+            parameters: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                name: { type: "string", optional: true },
+                content: { type: "string", optional: true },
+                description: { type: "string", optional: true },
+                isTemplate: { type: "boolean", optional: true },
+                variables: { type: "array", items: { type: "string" }, optional: true },
+                tags: { type: "array", items: { type: "string" }, optional: true },
+              },
+              required: ["id"],
+            },
+            handler: async (params) => {
+              try {
+                const updatedPrompt = await storageAdapter.updatePrompt(params.id, {
+                  name: params.name,
+                  content: params.content,
+                  description: params.description,
+                  isTemplate: params.isTemplate,
+                  variables: params.variables,
+                  tags: params.tags,
+                });
+                
+                return {
+                  type: "object",
+                  object: updatedPrompt,
+                };
+              } catch (error) {
+                return {
+                  type: "error",
+                  error: `Error updating prompt: ${error.message}`,
+                };
+              }
+            },
+          },
+          list_prompts: {
+            description: "List all prompts with optional filtering",
+            parameters: {
+              type: "object",
+              properties: {
+                isTemplate: { type: "boolean", optional: true },
+                tags: { type: "array", items: { type: "string" }, optional: true },
+                search: { type: "string", optional: true },
+                limit: { type: "number", optional: true },
+                offset: { type: "number", optional: true },
+              },
+            },
+            handler: async (params) => {
+              const prompts = await storageAdapter.listPrompts(params);
+              
+              return {
+                type: "object",
+                object: {
+                  prompts,
+                  total: prompts.length,
+                },
+              };
+            },
+          },
+          delete_prompt: {
+            description: "Delete a prompt",
+            parameters: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+              },
+              required: ["id"],
+            },
+            handler: async (params) => {
+              try {
+                await storageAdapter.deletePrompt(params.id);
+                return {
+                  type: "object",
+                  object: { success: true },
+                };
+              } catch (error) {
+                return {
+                  type: "error",
+                  error: `Error deleting prompt: ${error.message}`,
+                };
+              }
+            },
+          },
+          apply_template: {
+            description: "Apply variables to a template",
+            parameters: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                variables: { type: "object" },
+              },
+              required: ["id", "variables"],
+            },
+            handler: async (params) => {
+              try {
+                const prompt = await storageAdapter.getPrompt(params.id);
+                
+                if (!prompt.isTemplate) {
+                  return {
+                    type: "error",
+                    error: `Prompt is not a template: ${params.id}`,
+                  };
+                }
+                
+                const content = applyTemplate(prompt.content, params.variables);
+                
+                return {
+                  type: "object",
+                  object: {
+                    content,
+                    originalPrompt: prompt,
+                    appliedVariables: params.variables,
+                  },
+                };
+              } catch (error) {
+                return {
+                  type: "error",
+                  error: `Error applying template: ${error.message}`,
+                };
+              }
+            },
+          },
+        },
       }
-      
-      const now = new Date().toISOString();
-      const prompt: Prompt = {
-        id,
-        name,
-        description,
-        content,
-        isTemplate,
-        variables,
-        tags,
-        createdAt: now,
-        updatedAt: now,
-        version: 1
-      };
-      
-      await savePrompt(prompt);
-      
-      return {
-        content: [{
-          type: "text",
-          text: `Successfully added prompt "${name}".`
-        }]
-      };
-    }
-  );
-
-  // 2. Edit an existing prompt
-  server.tool(
-    "edit_prompt",
-    {
-      id: z.string(),
-      name: z.string().optional(),
-      description: z.string().optional(),
-      content: z.string().optional(),
-      isTemplate: z.boolean().optional(),
-      variables: z.array(z.string()).optional(),
-      tags: z.array(z.string()).optional()
-    },
-    async ({ id, name, description, content, isTemplate, variables, tags }) => {
-      const existingPrompt = await loadPrompt(id);
-      if (!existingPrompt) {
-        return {
-          content: [{
-            type: "text",
-            text: `Error: No prompt found with ID "${id}".`
-          }],
-          isError: true
-        };
-      }
-      
-      const updatedPrompt: Prompt = {
-        ...existingPrompt,
-        name: name || existingPrompt.name,
-        description: description !== undefined ? description : existingPrompt.description,
-        content: content || existingPrompt.content,
-        isTemplate: isTemplate !== undefined ? isTemplate : existingPrompt.isTemplate,
-        variables: variables || existingPrompt.variables,
-        tags: tags || existingPrompt.tags,
-        updatedAt: new Date().toISOString(),
-        version: existingPrompt.version + 1
-      };
-      
-      await savePrompt(updatedPrompt);
-      
-      return {
-        content: [{
-          type: "text",
-          text: `Successfully updated prompt "${updatedPrompt.name}".`
-        }]
-      };
-    }
-  );
-
-  // 3. Get a prompt
-  server.tool(
-    "get_prompt",
-    {
-      id: z.string()
-    },
-    async ({ id }) => {
-      const prompt = await loadPrompt(id);
-      if (!prompt) {
-        return {
-          content: [{
-            type: "text",
-            text: `Error: No prompt found with ID "${id}".`
-          }],
-          isError: true
-        };
-      }
-      
-      return {
-        content: [{
-          type: "text",
-          text: `# ${prompt.name}\n\n${prompt.description ? prompt.description + '\n\n' : ''}${prompt.content}`
-        }]
-      };
-    }
-  );
-
-  // 4. List all prompts, optionally filtered by tags
-  server.tool(
-    "list_prompts",
-    {
-      tags: z.array(z.string()).optional()
-    },
-    async ({ tags }) => {
-      const prompts = await listAllPrompts();
-      
-      const filteredPrompts = tags
-        ? prompts.filter(prompt => 
-            prompt.tags?.some(tag => tags.includes(tag))
-          )
-        : prompts;
-      
-      if (filteredPrompts.length === 0) {
-        return {
-          content: [{
-            type: "text",
-            text: "No prompts found matching the criteria."
-          }]
-        };
-      }
-      
-      const promptList = filteredPrompts.map(p => 
-        `- **${p.name}** (ID: \`${p.id}\`): ${p.description || 'No description'}\n  ${p.isTemplate ? '📄 Template' : '📝 Regular'} | Tags: ${p.tags?.join(', ') || 'none'}`
-      ).join('\n\n');
-      
-      return {
-        content: [{
-          type: "text",
-          text: `# Available Prompts\n\n${promptList}`
-        }]
-      };
-    }
-  );
-
-  // 5. Apply a template with variable substitution
-  server.tool(
-    "apply_template",
-    {
-      id: z.string(),
-      variables: z.record(z.string()).optional()
-    },
-    async ({ id, variables = {} }) => {
-      const prompt = await loadPrompt(id);
-      if (!prompt) {
-        return {
-          content: [{
-            type: "text",
-            text: `Error: No prompt found with ID "${id}".`
-          }],
-          isError: true
-        };
-      }
-      
-      if (!prompt.isTemplate) {
-        return {
-          content: [{
-            type: "text",
-            text: prompt.content
-          }]
-        };
-      }
-      
-      let result = prompt.content;
-      
-      // Apply variable substitution
-      for (const [key, value] of Object.entries(variables)) {
-        const regex = new RegExp(`{{${key}}}`, 'g');
-        result = result.replace(regex, value);
-      }
-      
-      // Check for any remaining variables
-      const remainingVars = result.match(/{{([^}]+)}}/g);
-      if (remainingVars) {
-        const varList = remainingVars.map(v => v.replace(/{{|}}/g, '')).join(', ');
-        console.error(`Warning: Some variables not substituted: ${varList}`);
-      }
-      
-      return {
-        content: [{
-          type: "text",
-          text: result
-        }]
-      };
-    }
-  );
-
-  // Start the server with stdio transport
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+    );
+    
+    // Connect to transport
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    
+    console.error("MCP Prompts Server started");
+  } catch (error) {
+    console.error("Error starting server:", error);
+  }
 }
 
 // Run the server
-main().catch(error => {
-  console.error("Error starting server:", error);
+main().catch((error) => {
+  console.error("Unhandled error:", error);
   process.exit(1);
 });

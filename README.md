@@ -1,159 +1,386 @@
-# MCP Prompts Server
+# MCP-Prompts Server
 
-An MCP server for managing prompts and templates with project orchestration capabilities. Part of the Model Context Protocol ecosystem.
+A Model Context Protocol (MCP) server for managing prompts and templates, allowing standardized sharing and application of prompts across MCP-compatible applications.
 
-<a href="https://glama.ai/mcp/servers/i0z4f3pr82">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/i0z4f3pr82/badge" alt="Prompts Server MCP server" />
-</a>
+## Overview
 
-This server provides a simple way to store, retrieve, and apply templates for AI prompts, making it easier to maintain consistent prompting patterns across your AI applications.
+MCP-Prompts provides a focused, efficient prompt management system built on MCP server standards. It allows you to:
 
-## Features
-
-- Store and retrieve prompts
-- Create and use templates with variables
-- List prompts with filtering by tags
-- Apply variables to templates
-- Multiple storage backends (file system and PostgreSQL)
-- Easy to use with Claude and other AI assistants
+- Store and organize prompts and templates
+- Apply variables to templates to generate prompts dynamically
+- Filter and search prompts by tags, categories, and content
+- Integrate with Claude Desktop and other MCP clients
+- Deploy as a standalone service or as part of a larger MCP ecosystem
 
 ## Installation
 
-### Using npx (recommended)
+### NPM Global Installation
 
 ```bash
-npx -y @sparesparrow/mcp-prompts
+# Install globally
+npm install -g @sparesparrow/prompts
+
+# Run the server
+mcp-prompts
 ```
 
-### Global installation
+### Local Installation
 
 ```bash
-npm install -g @sparesparrow/mcp-prompts
-```
+# Clone the repository
+git clone https://github.com/sparesparrow/mcp-prompts.git
+cd mcp-prompts
 
-### Using Docker
+# Install dependencies
+npm install
 
-```bash
-docker run -p 3003:3003 -v ~/mcp/data:/app/data sparesparrow/mcp-prompts:latest
+# Build the project
+npm run build
+
+# Run the server
+npm start
 ```
 
 ## Configuration
 
-The server can be configured using environment variables:
+MCP-Prompts can be configured using environment variables:
 
-| Environment Variable | Description | Default |
-|----------------------|-------------|---------|
-| SERVER_NAME | Server name | MCP Prompts Server |
-| SERVER_VERSION | Server version | package.json version |
-| STORAGE_TYPE | Storage type: 'file' or 'postgres' | file |
-| PROMPTS_DIR | Directory for storing prompts | ~/mcp/data/prompts |
-| BACKUPS_DIR | Directory for backups | ~/mcp/data/backups |
-| PORT | Port for HTTP server | 3003 |
-| LOG_LEVEL | Logging level | info |
-| HTTP_SERVER | Enable HTTP server | false |
-| HOST | Host for HTTP server | 0.0.0.0 |
+```bash
+# Storage configuration
+STORAGE_TYPE=file            # Options: file, postgres, memory
+PROMPTS_DIR=/path/to/prompts # Directory for file storage
+BACKUPS_DIR=/path/to/backups # Directory for backups
 
-### PostgreSQL settings (required if STORAGE_TYPE=postgres)
+# Server configuration
+NODE_ENV=production          # Environment: production, development
+HTTP_SERVER=false            # Enable/disable HTTP API server
+PORT=3003                    # HTTP server port
+HOST=0.0.0.0                 # HTTP server host
+LOG_LEVEL=info               # Log level: debug, info, warn, error
 
-| Environment Variable | Description | Default |
-|----------------------|-------------|---------|
-| PG_HOST | PostgreSQL host | localhost |
-| PG_PORT | PostgreSQL port | 5432 |
-| PG_DATABASE | PostgreSQL database name | mcp_prompts |
-| PG_USER | PostgreSQL username | postgres |
-| PG_PASSWORD | PostgreSQL password | |
-| PG_SSL | Use SSL for PostgreSQL connection | false |
-| POSTGRES_CONNECTION_STRING | Full PostgreSQL connection string (overrides individual settings) | |
+# PostgreSQL configuration (if using postgres storage)
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DATABASE=mcp_prompts
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_SSL=false
+# Or use connection string:
+POSTGRES_CONNECTION_STRING=postgresql://postgres:postgres@localhost:5432/mcp_prompts
+```
 
-## Usage
+## Docker Deployment
 
-### Using with Claude
+### Using Docker Run
 
-In Claude 3 desktop app, you can configure the MCP Prompts server in your `claude_desktop_config.json`:
+```bash
+docker run -d \
+  --name mcp-prompts \
+  -p 3003:3003 \
+  -v /path/to/prompts:/app/data/prompts \
+  -v /path/to/backups:/app/data/backups \
+  -e STORAGE_TYPE=file \
+  -e HTTP_SERVER=true \
+  sparesparrow/mcp-prompts:latest
+```
+
+### Using Docker Compose
+
+Basic setup with file storage:
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  mcp-prompts:
+    image: sparesparrow/mcp-prompts:latest
+    container_name: mcp-prompts
+    environment:
+      - NODE_ENV=production
+      - STORAGE_TYPE=file
+      - PROMPTS_DIR=/app/data/prompts
+      - BACKUPS_DIR=/app/data/backups
+      - LOG_LEVEL=info
+      - HTTP_SERVER=false
+      - PORT=3003
+      - HOST=0.0.0.0
+    volumes:
+      - mcp-data:/app/data
+    ports:
+      - "3000:3000"
+      - "3003:3003"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  mcp-data:
+```
+
+With PostgreSQL:
+
+```yaml
+# docker-compose.postgres.yml
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:14
+    container_name: mcp-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mcp_prompts
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  mcp-prompts:
+    image: sparesparrow/mcp-prompts:latest
+    container_name: mcp-prompts-pg
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - STORAGE_TYPE=postgres
+      - POSTGRES_CONNECTION_STRING=postgresql://postgres:postgres@postgres:5432/mcp_prompts
+      - PROMPTS_DIR=/app/data/prompts
+      - BACKUPS_DIR=/app/data/backups
+      - LOG_LEVEL=info
+      - HTTP_SERVER=true
+      - PORT=3003
+      - HOST=0.0.0.0
+    volumes:
+      - prompts_data:/app/data
+    ports:
+      - "3003:3003"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    name: mcp-postgres-data
+  prompts_data:
+```
+
+## Usage with Claude Desktop
+
+Add the MCP-Prompts server to your Claude Desktop configuration:
 
 ```json
 {
   "mcpServers": {
-    "prompts": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@sparesparrow/mcp-prompts"
-      ],
+    "mcp-prompts": {
+      "command": "node",
+      "args": ["/path/to/mcp-prompts/build/index.js"],
       "env": {
         "STORAGE_TYPE": "file",
-        "PROMPTS_DIR": "/path/to/your/prompts/directory",
-        "LOG_LEVEL": "debug"
+        "PROMPTS_DIR": "/path/to/prompts"
       }
     }
   }
 }
 ```
 
-### Available Tools
+## API Usage
 
-The MCP Prompts server provides the following tools:
+MCP-Prompts provides an HTTP API when running with `HTTP_SERVER=true`:
 
-- `add_prompt`: Add a new prompt
-- `get_prompt`: Get a prompt by ID
+### Endpoints
+
+- `GET /health`: Server health check
+- `GET /prompts`: List all prompts
+- `GET /prompts/:id`: Get a prompt by ID
+- `POST /prompts`: Create a new prompt
+- `PUT /prompts/:id`: Update a prompt
+- `DELETE /prompts/:id`: Delete a prompt
+- `POST /templates/:id/apply`: Apply variables to a template
+
+### Example: Creating a Prompt
+
+```bash
+curl -X POST http://localhost:3003/prompts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Simple Greeting",
+    "content": "Hello, world!",
+    "tags": ["greeting", "simple"]
+  }'
+```
+
+### Example: Creating a Template
+
+```bash
+curl -X POST http://localhost:3003/prompts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Custom Greeting",
+    "content": "Hello, {{name}}! Welcome to {{service}}.",
+    "isTemplate": true,
+    "tags": ["greeting", "template"]
+  }'
+```
+
+### Example: Applying a Template
+
+```bash
+curl -X POST http://localhost:3003/templates/custom-greeting/apply \
+  -H "Content-Type: application/json" \
+  -d '{
+    "variables": {
+      "name": "John",
+      "service": "MCP-Prompts"
+    }
+  }'
+```
+
+## MCP Protocol Integration
+
+MCP-Prompts implements the following MCP tools:
+
+- `add_prompt`: Create a new prompt
+- `get_prompt`: Retrieve a prompt by ID
 - `update_prompt`: Update an existing prompt
-- `list_prompts`: List all prompts
-- `delete_prompt`: Delete a prompt by ID
-- `apply_template`: Apply variables to a prompt template
+- `list_prompts`: List prompts with filtering options
+- `delete_prompt`: Delete a prompt
+- `apply_template`: Apply variables to a template
 
-### HTTP Endpoints
-
-If the HTTP server is enabled, the following endpoints are available:
-
-- `/health`: Health check endpoint
-- `/`: Alias for health check endpoint
-
-## Prompt Format
-
-A prompt has the following structure:
+Example MCP tool invocation (using MCP JSON-RPC):
 
 ```json
 {
-  "id": "unique-id",
-  "name": "Prompt Name",
-  "description": "Optional description",
-  "content": "The prompt content with {{variables}}",
-  "tags": ["tag1", "tag2"],
-  "isTemplate": true,
-  "variables": ["variable1", "variable2"],
-  "metadata": {
-    "author": "Your Name",
-    "version": "1.0.0"
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tool",
+  "params": {
+    "name": "list_prompts",
+    "params": {
+      "isTemplate": true,
+      "tags": ["greeting"]
+    }
   }
 }
 ```
 
 ## Development
 
-To set up the development environment:
+### Project Structure
+
+```
+/
+├── src/                     # Source code
+│   ├── adapters/            # Storage adapters (file, postgres, memory)
+│   ├── interfaces/          # TypeScript interfaces
+│   ├── services/            # Business logic
+│   ├── tools/               # MCP tools implementation
+│   ├── utils/               # Utilities
+│   └── index.ts             # Main entry point
+├── scripts/                 # Build and utility scripts
+├── tests/                   # Test files
+├── docker/                  # Docker configuration files
+├── .github/workflows/       # GitHub Actions workflows
+└── .devcontainer/           # VS Code devcontainer configuration
+```
+
+### Development Setup
 
 ```bash
+# Clone the repository
 git clone https://github.com/sparesparrow/mcp-prompts.git
 cd mcp-prompts
+
+# Install dependencies
 npm install
-npm run build
+
+# Run in development mode (with auto-reload)
 npm run dev
-```
 
-### Testing
-
-Run the tests:
-
-```bash
+# Run tests
 npm test
+
+# Run integration tests
+npm run test:integration
+
+# Run Docker tests
+npm run test:docker
 ```
 
-Run the MCP Inspector for testing:
+### Running in a Development Container
+
+VS Code users can use the included devcontainer configuration:
+
+1. Install the "Remote - Containers" extension
+2. Open the project folder in VS Code
+3. Click "Reopen in Container" when prompted
+4. The container will set up the development environment automatically
+
+### Building for Production
 
 ```bash
-npm run test:inspector
+# Build the project
+npm run build
+
+# Start the server in production mode
+npm start
+
+# Build the Docker image
+npm run docker:build
+
+# Run with Docker Compose
+npm run docker:up
 ```
+
+## Containerized Testing
+
+MCP-Prompts includes several scripts for containerized testing:
+
+```bash
+# Run all Docker tests
+./scripts/test/docker-test.sh
+
+# Test with PostgreSQL storage
+./scripts/test/run-postgres-tests.sh
+
+# Test the Docker build
+./scripts/test/test-docker-build.sh
+
+# Test with fixed Dockerfile
+./scripts/test/test-fixed-docker.sh
+```
+
+## Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run tests (`npm test`)
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+Please ensure your code follows our coding standards and includes appropriate tests.
 
 ## License
 
-MIT
+This project is licensed under the MIT License - see the LICENSE file for details.
