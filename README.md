@@ -62,6 +62,10 @@ This server provides a simple way to store, retrieve, and apply templates for AI
     - [Prompt Visualization Dashboard](#2-prompt-visualization-dashboard)
     - [Template-Based Project Generator](#3-template-based-project-generator)
     - [Docker Compose for Full Integration](#docker-compose-for-full-integration)
+- [Server-Sent Events (SSE) Support](#server-sent-events-sse-support)
+  - [Running with SSE Support](#running-with-sse-support)
+  - [Configuring Claude Desktop to Use SSE](#configuring-claude-desktop-to-use-sse)
+  - [SSE API](#sse-api)
 
 ## Features
 
@@ -544,124 +548,166 @@ This creates a dedicated testing environment with:
 
 #### Multiple MCP Servers Integration
 
-The MCP Prompts server is designed to work seamlessly with other MCP servers, allowing for a rich ecosystem of interconnected services to enhance prompt management and AI interactions.
+The MCP Prompts server is designed to work seamlessly with other MCP servers to create a powerful ecosystem for AI applications. Below are diagrams illustrating different integration patterns.
 
-#### Architecture Overview
+### Core Integration Architecture
 
 ```mermaid
 graph TD
-    classDef primary fill:#f96,stroke:#333,stroke-width:2px
-    classDef secondary fill:#9cf,stroke:#333,stroke-width:1px
-    classDef storage fill:#fcf,stroke:#333,stroke-width:1px
-    classDef external fill:#cfc,stroke:#333,stroke-width:1px
-
-    Client[Claude Desktop / MCP Client] --> MCP[MCP Prompts Server]
-    MCP:::primary
-
-    %% Storage Options
-    MCP --> FS[Filesystem Storage]:::storage
-    MCP --> PG[PostgreSQL Storage]:::storage
-    MCP --> MEM[Memory Storage]:::storage
-
-    %% Supporting MCP Servers
-    MCP <--> PGAI[PGAI Server]:::secondary
-    MCP <--> Github[GitHub MCP Server]:::secondary
-    MCP <--> Memory[Memory MCP Server]:::secondary
-    MCP <--> SeqThink[Sequential Thinking Server]:::external
-    MCP <--> ElevenLabs[ElevenLabs Text-to-Speech]:::external
+    Client[Client Application]
     
-    %% Connections
-    Github --> GH[(GitHub Repository)]:::external
-    PG --> DB[(PostgreSQL Database)]:::external
-    PGAI --> PGAIDb[(Vector Database)]:::external
-
-    %% Labels
-    subgraph "Core System"
-        MCP
-        FS
-        PG
-        MEM
+    subgraph "MCP Ecosystem"
+        Prompts[Prompts Server]
+        GitHub[GitHub Server]
+        Memory[Memory Server]
+        FileSystem[Filesystem Server]
+        Postgres[PostgreSQL Server]
+        Sequential[Sequential Thinking Server]
+        Puppeteer[Puppeteer Server]
+        
+        Prompts ---|Template Exchange| GitHub
+        Prompts ---|Context Storage| Memory
+        Prompts ---|File Access| FileSystem
+        Prompts ---|Database Storage| Postgres
+        Sequential ---|Complex Reasoning| Prompts
+        Puppeteer ---|Web Interaction| Prompts
     end
     
-    subgraph "Extended Capabilities"
-        PGAI
-        Github
-        Memory
-        SeqThink
-        ElevenLabs
+    Client -->|Template Requests| Prompts
+    Client -->|Repository Access| GitHub
+    Client -->|Context Retrieval| Memory
+    Client -->|File Operations| FileSystem
+    Client -->|Data Queries| Postgres
+    Client -->|Step-by-Step Analysis| Sequential
+    Client -->|Browser Automation| Puppeteer
+    
+    style Prompts fill:#2ecc71,stroke:#27ae60,color:#fff
+    style GitHub fill:#3498db,stroke:#2980b9,color:#fff
+    style Memory fill:#9b59b6,stroke:#8e44ad,color:#fff
+    style FileSystem fill:#e74c3c,stroke:#c0392b,color:#fff
+    style Postgres fill:#f1c40f,stroke:#f39c12,color:#000
+    style Sequential fill:#1abc9c,stroke:#16a085,color:#fff
+    style Puppeteer fill:#34495e,stroke:#2c3e50,color:#fff
+```
+
+### Data Flow for Template-Based Workflows
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Prompts as Prompts Server
+    participant GitHub as GitHub Server
+    participant Memory as Memory Server
+    participant FileSystem as Filesystem Server
+    
+    Client->>Prompts: Request Template (get_prompt)
+    Prompts-->>Client: Return Template Structure
+    
+    Client->>GitHub: Fetch Repository Context
+    GitHub-->>Client: Return Repository Data
+    
+    Client->>Prompts: Apply Template with Variables (apply_template)
+    Prompts-->>Client: Return Populated Template
+    
+    Client->>Memory: Store Session Context
+    Memory-->>Client: Context Stored Confirmation
+    
+    Client->>FileSystem: Save Generated Content
+    FileSystem-->>Client: File Operation Confirmation
+    
+    Note over Client,FileSystem: Complete Template-Based Workflow
+```
+
+### Multi-Server Orchestration Pattern
+
+```mermaid
+graph TB
+    Client[Client Application]
+    
+    subgraph "Orchestration Layer"
+        Router[MCP Router]
     end
+    
+    subgraph "Core Servers"
+        Prompts[Prompts Server]
+        Memory[Memory Server]
+        GitHub[GitHub Server]
+    end
+    
+    subgraph "Specialized Servers"
+        Sequential[Sequential Thinking]
+        FileSystem[Filesystem Server]
+        Postgres[PostgreSQL Server]
+        WebSearch[Web Search Server]
+        TimeSeries[Time Series Server]
+    end
+    
+    Client -->|All Requests| Router
+    
+    Router -->|Template Operations| Prompts
+    Router -->|Context Storage| Memory
+    Router -->|Repository Access| GitHub
+    Router -->|Complex Reasoning| Sequential
+    Router -->|File Operations| FileSystem
+    Router -->|Data Queries| Postgres
+    Router -->|Search Queries| WebSearch
+    Router -->|Time Data| TimeSeries
+    
+    Prompts -.->|Uses| Memory
+    Sequential -.->|Uses| Memory
+    Sequential -.->|Uses| Prompts
+    
+    style Router fill:#3498db,stroke:#2980b9,color:#fff,stroke-width:2px
+    style Prompts fill:#2ecc71,stroke:#27ae60,color:#fff
+    style Memory fill:#9b59b6,stroke:#8e44ad,color:#fff
+    style GitHub fill:#e74c3c,stroke:#c0392b,color:#fff
+    style Sequential fill:#1abc9c,stroke:#16a085,color:#fff
+    style FileSystem fill:#f39c12,stroke:#e67e22,color:#000
+    style Postgres fill:#34495e,stroke:#2c3e50,color:#fff
+    style WebSearch fill:#7f8c8d,stroke:#95a5a6,color:#fff
+    style TimeSeries fill:#d35400,stroke:#e67e22,color:#fff
 ```
 
-#### Integration Benefits
+### Resources Integration Pattern
 
-This integrated architecture provides several advantages:
-
-1. **Storage Flexibility**: Choose between file-based, PostgreSQL, or memory storage
-2. **GitHub Integration**: Seamlessly synchronize prompts between the local environment and GitHub repositories
-3. **Vector Search**: PGAI integration enables semantic search capabilities for prompt discovery
-4. **Enhanced AI Interactions**: Sequential thinking server allows for multi-step problem solving
-5. **Voice Output**: ElevenLabs integration enables text-to-speech conversion for prompt descriptions and feedback
-
-#### Integration Setup
-
-To enable multiple MCP servers working together, configure your Claude Desktop with the appropriate MCP server definitions:
-
-```json
-{
-  "mcpServers": {
-    "prompts": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@sparesparrow/mcp-prompts"
-      ],
-      "env": {
-        "STORAGE_TYPE": "file",
-        "PROMPTS_DIR": "/path/to/prompts"
-      }
-    },
-    "github": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-github"
-      ],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "your_token_here"
-      }
-    },
-    "memory": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-memory"
-      ]
-    },
-    "sequential-thinking": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-sequential-thinking"
-      ]
-    }
-  }
-}
+```mermaid
+graph LR
+    Client[Client Application]
+    
+    subgraph "MCP Prompts Server"
+        PromptManager[Prompt Manager]
+        ResourceAdapter[Resource Adapter]
+        TemplateProcessor[Template Processor]
+    end
+    
+    subgraph "External MCP Servers"
+        GitHub[GitHub Server]
+        FileSystem[Filesystem Server]
+        Postgres[PostgreSQL Server]
+        Memory[Memory Server]
+    end
+    
+    Client -->|1. Request Template| PromptManager
+    PromptManager -->|2. Fetch Template| TemplateProcessor
+    
+    Client -->|3. Request Resources| ResourceAdapter
+    ResourceAdapter -->|4a. Fetch Files| FileSystem
+    ResourceAdapter -->|4b. Query Repository| GitHub
+    ResourceAdapter -->|4c. Query Database| Postgres
+    ResourceAdapter -->|4d. Retrieve Context| Memory
+    
+    FileSystem -->|5a. File Content| ResourceAdapter
+    GitHub -->|5b. Repository Data| ResourceAdapter
+    Postgres -->|5c. Query Results| ResourceAdapter
+    Memory -->|5d. Context Data| ResourceAdapter
+    
+    ResourceAdapter -->|6. Resource Data| TemplateProcessor
+    TemplateProcessor -->|7. Populated Template| Client
+    
+    style PromptManager fill:#2ecc71,stroke:#27ae60,color:#fff
+    style ResourceAdapter fill:#3498db,stroke:#2980b9,color:#fff
+    style TemplateProcessor fill:#9b59b6,stroke:#8e44ad,color:#fff
 ```
-
-For Docker deployment with multiple MCP servers, use the integration compose file:
-
-```bash
-docker compose -f docker-compose.yml -f docker/docker-compose.integration.yml up -d
-```
-
-#### Building and Publishing Docker Images
-
-A convenience script is provided for building and publishing Docker images:
-
-```bash
-./docker/scripts/build-and-publish.sh [tag]
-```
-This builds both the main and test images and publishes them to Docker Hub.
 
 ## Development
 
@@ -1625,3 +1671,90 @@ volumes:
 ```
 
 This integration approach provides a complete ecosystem for managing prompts, creating visualizations, orchestrating workflows, and persisting data.
+
+## Server-Sent Events (SSE) Support
+
+The MCP-Prompts server now includes support for Server-Sent Events (SSE), which enables real-time updates without polling. This is particularly useful for applications that need to receive prompt updates in real-time, such as the Claude desktop application.
+
+### Running with SSE Support
+
+You can run the MCP-Prompts server with SSE support using Docker Compose:
+
+```bash
+docker-compose up mcp-prompts-sse
+```
+
+This will start the MCP-Prompts server with SSE enabled on port 3003. The SSE endpoint is available at `/events`.
+
+### Configuring Claude Desktop to Use SSE
+
+To configure Claude desktop to use the dockerized MCP-Prompts server with SSE support, update your `claude_desktop_config.json` file (typically located at `~/.config/Claude/claude_desktop_config.json`):
+
+```json
+"prompts": {
+  "command": "docker",
+  "args": [
+    "run",
+    "--rm",
+    "-p",
+    "3003:3003",
+    "-v",
+    "/path/to/your/prompts:/app/data/prompts",
+    "-v",
+    "/path/to/your/backups:/app/data/backups",
+    "--name",
+    "mcp-prompts-sse",
+    "-e",
+    "STORAGE_TYPE=file",
+    "-e",
+    "PROMPTS_DIR=/app/data/prompts",
+    "-e",
+    "BACKUPS_DIR=/app/data/backups",
+    "-e",
+    "HTTP_SERVER=true",
+    "-e",
+    "PORT=3003",
+    "-e",
+    "HOST=0.0.0.0",
+    "-e",
+    "ENABLE_SSE=true",
+    "-e",
+    "SSE_PATH=/events",
+    "-e",
+    "CORS_ORIGIN=*",
+    "sparesparrow/mcp-prompts:latest"
+  ]
+}
+```
+
+Replace `/path/to/your/prompts` and `/path/to/your/backups` with your actual paths.
+
+### SSE API
+
+The SSE endpoint sends the following events:
+
+1. **Connect Event**: Sent when a client connects to the SSE endpoint
+   ```json
+   { "type": "connect", "message": "Connected to MCP Prompts SSE stream" }
+   ```
+
+2. **Heartbeat Event**: Sent every 30 seconds to keep the connection alive
+   ```json
+   { "type": "heartbeat", "timestamp": "2023-03-15T12:34:56.789Z" }
+   ```
+
+You can listen for these events in your client application:
+
+```javascript
+const eventSource = new EventSource('http://localhost:3003/events');
+
+eventSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Received SSE event:', data);
+};
+
+eventSource.onerror = (error) => {
+  console.error('SSE error:', error);
+  eventSource.close();
+};
+```
