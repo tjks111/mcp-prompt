@@ -14,6 +14,7 @@ import { Prompt, ServerConfig, StorageAdapter } from "./interfaces/index.js";
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { FileStorageAdapter, MemoryStorageAdapter, PostgresStorageAdapter } from './adapters/index.js';
+import { startHttpServer } from './http-server.js';
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -118,7 +119,8 @@ function applyTemplate(template: string, variables: Record<string, string>): str
 // Main function
 async function main() {
   try {
-    console.error("Starting MCP Prompts Server...");
+    console.error(`Starting MCP Prompts Server v${DEFAULT_CONFIG.version}`);
+    console.error(`Config: ${JSON.stringify(DEFAULT_CONFIG)}`);
     
     // Create and connect to storage
     storageAdapter = await createStorageAdapter(DEFAULT_CONFIG);
@@ -452,11 +454,16 @@ async function main() {
       }
     );
     
-    // Connect to transport
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+    // Start HTTP server if enabled
+    if (DEFAULT_CONFIG.httpServer) {
+      startHttpServer(DEFAULT_CONFIG);
+    }
     
-    console.error("MCP Prompts Server started");
+    // Connect to transport
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    
+    console.error("MCP Prompts Server connected successfully to stdio transport");
   } catch (error) {
     console.error("Error starting server:", error);
   }

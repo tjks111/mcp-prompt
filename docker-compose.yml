@@ -1,35 +1,17 @@
-version: "3.8"
+# Base Docker Compose file for MCP Prompts
+# This file provides the foundational configuration
+
 
 name: mcp-prompts
 
 services:
-  # PostgreSQL database
-  postgres:
-    image: postgres:14-alpine
-    container_name: mcp-postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: mcp_prompts
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    networks:
-      - mcp-network
-
-  # MCP Prompts Server with File Storage
-  mcp-file:
+  # MCP Prompts Server with File Storage (default)
+  mcp-prompts:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: mcp-prompts-file
+      dockerfile: docker/Dockerfile
+    image: sparesparrow/mcp-prompts:latest
+    container_name: mcp-prompts
     environment:
       - NODE_ENV=production
       - STORAGE_TYPE=file
@@ -40,99 +22,22 @@ services:
       - PORT=3003
       - HOST=0.0.0.0
     volumes:
-      - file_storage:/app/data
+      - mcp-data:/app/data
     ports:
       - "3003:3003"
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3003/health"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "/health-check.sh"]
+      interval: 10s
+      timeout: 3s
       retries: 3
-      start_period: 5s
     restart: unless-stopped
     networks:
       - mcp-network
-
-  # MCP Prompts Server with PostgreSQL Storage
-  mcp-postgres:
-    image: sparesparrow/mcp-prompts:latest
-    container_name: mcp-prompts-postgres
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      - NODE_ENV=production
-      - STORAGE_TYPE=postgres
-      - PG_HOST=postgres
-      - PG_PORT=5432
-      - PG_DATABASE=mcp_prompts
-      - PG_USER=postgres
-      - PG_PASSWORD=postgres
-      - PG_SSL=false
-      - LOG_LEVEL=info
-      - HTTP_SERVER=true
-      - PORT=3004
-      - HOST=0.0.0.0
-    ports:
-      - "3004:3004"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3004/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
-    restart: unless-stopped
-    networks:
-      - mcp-network
-
-  # MCP Prompts Server with MDC Storage (Cursor Rules)
-  mcp-mdc:
-    image: sparesparrow/mcp-prompts:latest
-    container_name: mcp-prompts-mdc
-    environment:
-      - NODE_ENV=production
-      - STORAGE_TYPE=mdc
-      - MDC_RULES_DIR=/app/data/rules
-      - LOG_LEVEL=info
-      - HTTP_SERVER=true
-      - PORT=3005
-      - HOST=0.0.0.0
-    volumes:
-      - mdc_storage:/app/data
-    ports:
-      - "3005:3005"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3005/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
-    restart: unless-stopped
-    networks:
-      - mcp-network
-
-  # Adminer for PostgreSQL management (optional, for development)
-  adminer:
-    image: adminer:latest
-    container_name: mcp-adminer
-    depends_on:
-      - postgres
-    ports:
-      - "8080:8080"
-    restart: unless-stopped
-    networks:
-      - mcp-network
-    profiles:
-      - dev
 
 volumes:
-  postgres_data:
-    name: mcp-postgres-data
-  file_storage:
-    name: mcp-file-storage
-  mdc_storage:
-    name: mcp-mdc-storage
+  mcp-data:
+    name: mcp-prompts-data
 
 networks:
   mcp-network:
-    driver: bridge 
+    driver: bridge

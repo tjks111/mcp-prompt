@@ -1,79 +1,53 @@
-FROM node:20-alpine AS build
-
+# Multi-stage Dockerfile for MCP Prompts
+# Stage 1: Dependencies
+FROM node:20-alpine AS deps
 WORKDIR /app
-
-# Set env to indicate Docker build
-ENV DOCKER_BUILD=true
-
-# Copy package files first for better caching
-COPY package.json package-lock.json ./
-
-# Remove existing lock file and install dependencies including the specific MCP SDK version
-RUN npm install --no-save @modelcontextprotocol/sdk@1.6.0 && \
+COPY package*.json ./
+# Disable prepare script temporarily to prevent build during install
+RUN npm pkg delete scripts.prepare && \
     npm install
 
-# Copy the rest of the source files
-COPY . .
-
+# Stage 2: Builder
+FROM node:20-alpine AS builder
+WORKDIR /app
+# Copy dependencies
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/package*.json ./
+# Copy source code
+COPY tsconfig.json ./
+COPY src/ ./src/
 # Build the application
 RUN npm run build
 
-# Check that the build files exist (cannot use require with ESM modules)
-RUN if [ ! -f "./build/index.js" ]; then \
-      echo "❌ Build verification failed: index.js not found"; \
-      exit 1; \
-    else \
-      echo "✅ Build verification successful"; \
-    fi
-
-# Production image
-FROM node:20-alpine
-
+# Stage 3: Runtime
+FROM node:20-alpine AS runner
 WORKDIR /app
 
-# Set NODE_ENV and other environment variables
-ENV NODE_ENV=production \
-    STORAGE_TYPE=file \
-    PROMPTS_DIR=/app/data/prompts \
-    BACKUPS_DIR=/app/data/backups
+# Install utilities
+RUN apk --no-cache add curl wget bash
 
-# Copy only necessary files from the build stage
-COPY --from=build /app/build ./build
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/package.json ./package.json
-COPY --from=build /app/README.md ./README.md
-COPY --from=build /app/config ./config
+# Create data directories
+RUN mkdir -p /app/data/prompts /app/data/backups /app/data/rules && \
+    touch /app/data/prompts/.keep /app/data/backups/.keep /app/data/rules/.keep && \
+    chmod -R 755 /app/data
 
-# Explicitly copy package.json to build directory to fix path issues
-RUN cp ./package.json ./build/package.json
+# Copy health check script
+COPY docker/health-check.sh /health-check.sh
+RUN chmod +x /health-check.sh
 
-# Create a non-root user with a home directory
-RUN adduser -D -h /home/mcp mcp
-
-# Create data directory with correct permissions
-RUN mkdir -p /app/data/prompts /app/data/backups && \
-    chown -R mcp:mcp /app/data
-
-# Set the user
-USER mcp
-
-# Create volume for data persistence
-VOLUME ["/app/data"]
-
-# Add image metadata
-LABEL org.opencontainers.image.authors="sparesparrow"
-LABEL org.opencontainers.image.title="mcp-prompts"
-LABEL org.opencontainers.image.description="MCP server for managing prompts and templates"
-LABEL org.opencontainers.image.documentation="https://github.com/sparesparrow/mcp-prompts"
-LABEL org.opencontainers.image.vendor="sparesparrow"
-LABEL org.opencontainers.image.licenses="MIT"
-
-# Expose the port
-EXPOSE 3003
+# Copy built files
+COPY --from=deps /app/package*.json ./
+COPY --from=builder /app/dist ./dist
+COPY --from=deps /app/node_modules ./node_modules
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-  CMD wget -q --spider http://localhost:3003/health || exit 1
+HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 CMD /health-check.sh
 
-# Run the application (ensure we're running from the root directory)
-CMD ["node", "build/index.js"] 
+# Set non-root user
+USER node
+
+# Default ports
+EXPOSE 3000-3005
+
+# Default command
+CMD ["node", "dist/index.js"]

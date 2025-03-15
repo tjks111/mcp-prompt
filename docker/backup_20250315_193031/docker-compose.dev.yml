@@ -1,6 +1,7 @@
-version: "3.8"
+# Development environment for MCP Prompts
+# Hot-reloading server, database tools, documentation
 
-name: mcp-prompts-dev-environment
+name: mcp-prompts-development
 
 services:
   # PostgreSQL database for development
@@ -15,12 +16,15 @@ services:
       - "5432:5432"
     volumes:
       - postgres-dev-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
       start_period: 5s
+    networks:
+      - mcp-dev-network
 
   # Adminer for database management
   adminer:
@@ -30,12 +34,14 @@ services:
       - "8080:8080"
     depends_on:
       - postgres-dev
+    networks:
+      - mcp-dev-network
 
   # MCP Prompts server with hot reloading
   mcp-prompts-dev:
     build:
-      context: .
-      dockerfile: Dockerfile.dev
+      context: ..
+      dockerfile: docker/Dockerfile.development
     container_name: mcp-prompts-dev
     depends_on:
       postgres-dev:
@@ -56,15 +62,36 @@ services:
     ports:
       - "3003:3003"
     volumes:
-      - ./src:/app/src
-      - ./tests:/app/tests
-      - ./prompts:/app/prompts
-      - ./node_modules:/app/node_modules
+      - ../src:/app/src
+      - ../tests:/app/tests
+      - ../prompts:/app/prompts
     command: npm run dev
+    networks:
+      - mcp-dev-network
+
+  # Documentation server (optional)
+  docs:
+    image: node:20-alpine
+    container_name: mcp-docs
+    working_dir: /app
+    volumes:
+      - ../docs:/app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "3000:3000"
+    networks:
+      - mcp-dev-network
+    profiles:
+      - with-docs
 
 volumes:
   postgres-dev-data:
+    name: mcp-postgres-dev-data
 
 networks:
   mcp-dev-network:
-    driver: bridge 
+    name: mcp-dev-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.100.0/24 

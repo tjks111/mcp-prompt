@@ -1,0 +1,17 @@
+node_modules
+npm-debug.log
+.git
+.github
+.vscode
+.idea
+*.tgz
+coverage
+.env
+.env.*
+*.log
+data
+dist
+build
+temp*
+test*.json
+*.bak

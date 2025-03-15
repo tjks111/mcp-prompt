@@ -1,0 +1,32 @@
+# Development Dockerfile for MCP Prompts
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install utilities and development tools
+RUN apk --no-cache add curl wget bash git
+
+# Create data directories
+RUN mkdir -p /app/data/prompts /app/data/backups /app/data/rules && \
+    chmod -R 777 /app/data
+
+# Copy health check script
+COPY docker/health-check.sh /health-check.sh
+RUN chmod +x /health-check.sh
+
+# We'll mount the source code as a volume, so we only need to copy
+# the package.json files to install dependencies initially
+COPY package*.json ./
+
+# Install dependencies
+RUN npm pkg delete scripts.prepare && \
+    npm install
+
+# Health check
+HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 CMD /health-check.sh
+
+# Default ports for app and Node.js debugger
+EXPOSE 3000-3005 9229
+
+# Default command with hot reloading
+CMD ["npm", "run", "dev:watch"]

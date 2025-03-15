@@ -46,6 +46,22 @@ This server provides a simple way to store, retrieve, and apply templates for AI
 - [Changelog](#changelog)
 - [Best Practices](#best-practices)
 - [License](#license)
+- [Architecture](#architecture)
+- [MCP Resources Integration](#mcp-resources-integration)
+  - [The `resources/list` Method](#the-resourceslist-method)
+  - [Using Resources in Prompts](#using-resources-in-prompts)
+  - [Integration Pattern with Multiple MCP Servers](#integration-pattern-with-multiple-mcp-servers)
+  - [Configuring Resource Integration](#configuring-resource-integration)
+- [MCP Server Integration](#mcp-server-integration)
+  - [Integration with Mermaid Diagram Server](#integration-with-mermaid-diagram-server)
+  - [Integration with Orchestrator Server](#integration-with-orchestrator-server)
+  - [Advanced Integration with MCP Router](#advanced-integration-with-mcp-router)
+    - [Router Configuration](#router-configuration)
+  - [Use Cases and Integration Examples](#use-cases-and-integration-examples)
+    - [Project Documentation Generator](#1-project-documentation-generator)
+    - [Prompt Visualization Dashboard](#2-prompt-visualization-dashboard)
+    - [Template-Based Project Generator](#3-template-based-project-generator)
+    - [Docker Compose for Full Integration](#docker-compose-for-full-integration)
 
 ## Features
 
@@ -527,13 +543,116 @@ This creates a dedicated testing environment with:
 - Health check container
 
 #### Multiple MCP Servers Integration
+
+The MCP Prompts server is designed to work seamlessly with other MCP servers, allowing for a rich ecosystem of interconnected services to enhance prompt management and AI interactions.
+
+#### Architecture Overview
+
+```mermaid
+graph TD
+    classDef primary fill:#f96,stroke:#333,stroke-width:2px
+    classDef secondary fill:#9cf,stroke:#333,stroke-width:1px
+    classDef storage fill:#fcf,stroke:#333,stroke-width:1px
+    classDef external fill:#cfc,stroke:#333,stroke-width:1px
+
+    Client[Claude Desktop / MCP Client] --> MCP[MCP Prompts Server]
+    MCP:::primary
+
+    %% Storage Options
+    MCP --> FS[Filesystem Storage]:::storage
+    MCP --> PG[PostgreSQL Storage]:::storage
+    MCP --> MEM[Memory Storage]:::storage
+
+    %% Supporting MCP Servers
+    MCP <--> PGAI[PGAI Server]:::secondary
+    MCP <--> Github[GitHub MCP Server]:::secondary
+    MCP <--> Memory[Memory MCP Server]:::secondary
+    MCP <--> SeqThink[Sequential Thinking Server]:::external
+    MCP <--> ElevenLabs[ElevenLabs Text-to-Speech]:::external
+    
+    %% Connections
+    Github --> GH[(GitHub Repository)]:::external
+    PG --> DB[(PostgreSQL Database)]:::external
+    PGAI --> PGAIDb[(Vector Database)]:::external
+
+    %% Labels
+    subgraph "Core System"
+        MCP
+        FS
+        PG
+        MEM
+    end
+    
+    subgraph "Extended Capabilities"
+        PGAI
+        Github
+        Memory
+        SeqThink
+        ElevenLabs
+    end
+```
+
+#### Integration Benefits
+
+This integrated architecture provides several advantages:
+
+1. **Storage Flexibility**: Choose between file-based, PostgreSQL, or memory storage
+2. **GitHub Integration**: Seamlessly synchronize prompts between the local environment and GitHub repositories
+3. **Vector Search**: PGAI integration enables semantic search capabilities for prompt discovery
+4. **Enhanced AI Interactions**: Sequential thinking server allows for multi-step problem solving
+5. **Voice Output**: ElevenLabs integration enables text-to-speech conversion for prompt descriptions and feedback
+
+#### Integration Setup
+
+To enable multiple MCP servers working together, configure your Claude Desktop with the appropriate MCP server definitions:
+
+```json
+{
+  "mcpServers": {
+    "prompts": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@sparesparrow/mcp-prompts"
+      ],
+      "env": {
+        "STORAGE_TYPE": "file",
+        "PROMPTS_DIR": "/path/to/prompts"
+      }
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "your_token_here"
+      }
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  }
+}
+```
+
+For Docker deployment with multiple MCP servers, use the integration compose file:
+
 ```bash
 docker compose -f docker-compose.yml -f docker/docker-compose.integration.yml up -d
 ```
-This deploys multiple MCP servers to test their collaboration:
-- MCP Prompts server with file storage on port 3005
-- MCP Memory server on port 3010
-- MCP GitHub server on port 3011
 
 #### Building and Publishing Docker Images
 
@@ -808,3 +927,701 @@ mcp-prompt-manager/
 ## License
 
 MIT
+
+## Architecture
+
+The MCP Prompts Server is designed to integrate seamlessly with other MCP servers to provide a comprehensive ecosystem for AI prompt management. Below are diagrams illustrating various integration scenarios:
+
+### Core Architecture
+
+```mermaid
+graph TD
+    Client[Client Application] -->|API Requests| MCP[MCP Prompts Server]
+    MCP -->|File Storage| FileSystem[(File Storage)]
+    MCP -->|PostgreSQL Storage| Postgres[(PostgreSQL)]
+    MCP -->|MDC Format| MDC[(MDC Rules)]
+    
+    subgraph Storage Adapters
+        FileSystem
+        Postgres
+        MDC
+    end
+    
+    MCP -->|Templates| Templates[Template Processing]
+    MCP -->|Variables| Variables[Variable Substitution]
+    MCP -->|Health Check| Health[Health Check Endpoint]
+```
+
+### Multiple MCP Servers Integration
+
+```mermaid
+graph LR
+    Claude[Claude AI Assistant] -->|Requests| MCP[MCP Prompts Server]
+    
+    subgraph MCP Ecosystem
+        MCP -->|Resource Lists| FileServer[MCP Filesystem Server]
+        MCP -->|Memory Storage| MemoryServer[MCP Memory Server]
+        MCP -->|Database Operations| PostgresServer[MCP PostgreSQL Server]
+        MCP -->|Web Browsing| PuppeteerServer[MCP Puppeteer Server]
+        MCP -->|GitHub Integration| GitHubServer[MCP GitHub Server]
+        MCP -->|Search| BraveServer[MCP Brave Search Server]
+        MCP -->|Voice| ElevenLabsServer[MCP ElevenLabs Server]
+    end
+    
+    FileServer -->|Filesystem Access| Files[(Local Files)]
+    MemoryServer -->|In-Memory Storage| Memory[(Memory Cache)]
+    PostgresServer -->|Database Access| DB[(PostgreSQL Database)]
+    PuppeteerServer -->|Web Automation| Web[(Web Pages)]
+    GitHubServer -->|Git Operations| GitHub[(GitHub Repos)]
+    BraveServer -->|Search Results| Internet[(Internet)]
+    ElevenLabsServer -->|TTS Processing| Audio[(Audio Files)]
+```
+
+### Data Flow for Prompt Management
+
+```mermaid
+sequenceDiagram
+    participant Client as Client Application
+    participant MCP as MCP Prompts Server
+    participant Storage as Storage Adapter
+    participant Resources as Resource MCP Servers
+    
+    Client->>MCP: Request Prompt by ID
+    MCP->>Storage: Retrieve Prompt
+    Storage-->>MCP: Return Prompt Data
+    
+    alt Template Processing
+        Client->>MCP: Apply Template with Variables
+        MCP->>MCP: Process Template
+        MCP->>Resources: Request Additional Resources
+        Resources-->>MCP: Return Resource Data
+        MCP-->>Client: Return Processed Prompt
+    else Direct Retrieval
+        MCP-->>Client: Return Raw Prompt
+    end
+    
+    alt Update/Create
+        Client->>MCP: Add/Update Prompt
+        MCP->>Storage: Save Prompt
+        Storage-->>MCP: Confirmation
+        MCP-->>Client: Success Response
+    end
+```
+
+### Resource Integration Pattern
+
+```mermaid
+graph TD
+    subgraph Client Application
+        UI[User Interface]
+        UI -->|Interacts with| Assistant[AI Assistant]
+        Assistant -->|Sends Requests| MCPClient[MCP Client]
+    end
+    
+    subgraph MCP Server Ecosystem
+        MCPClient -->|Requests| PromptsServer[MCP Prompts Server]
+        PromptsServer -->|resources/list| ResourceList[Resource List Tool]
+        
+        ResourceList -->|Discovers| FS[Filesystem Resources]
+        ResourceList -->|Discovers| GH[GitHub Resources]
+        ResourceList -->|Discovers| DB[Database Resources]
+        ResourceList -->|Discovers| Web[Web Resources]
+        
+        PromptsServer -->|apply_template| TemplateEngine[Template Engine]
+        TemplateEngine -->|Processes| Variables[Variable Substitution]
+        Variables -->|Uses| ResourceData[Resource Data]
+        
+        FS -->|Provides| ResourceData
+        GH -->|Provides| ResourceData
+        DB -->|Provides| ResourceData
+        Web -->|Provides| ResourceData
+    end
+    
+    MCPClient -->|Receives Results| Assistant
+```
+
+### Docker Deployment Architecture
+
+```mermaid
+graph TD
+    subgraph Host Machine
+        Docker[Docker Engine]
+        Volumes[(Docker Volumes)]
+        Network[Docker Network]
+    end
+    
+    subgraph MCP Containers
+        PromptsCont[MCP Prompts Container]
+        PostgresCont[PostgreSQL Container]
+        MemoryCont[Memory MCP Container]
+        GitHubCont[GitHub MCP Container]
+    end
+    
+    Docker -->|Runs| MCP Containers
+    PromptsCont -->|Connects to| Network
+    PostgresCont -->|Connects to| Network
+    MemoryCont -->|Connects to| Network
+    GitHubCont -->|Connects to| Network
+    
+    PromptsCont -->|Persists Data| Volumes
+    PostgresCont -->|Persists Data| Volumes
+    
+    Client[External Client] -->|HTTP Requests| PromptsCont
+```
+
+## MCP Resources Integration
+
+The MCP Prompts Server can be integrated with other MCP servers to leverage their capabilities through resource sharing. This enables powerful workflows where prompts can be enriched with data from various sources.
+
+### The `resources/list` Method
+
+The `resources/list` method provides a way to discover available data sources that can be incorporated into prompts. By implementing this method, the MCP Prompts Server becomes more versatile and can pull context from multiple sources.
+
+#### Use Cases for `resources/list`
+
+- **Discovery and Exploration of Contextual Data**: Clients can discover all available resources that might be relevant for a session
+- **Workflow Orchestration and Automation**: Dynamically determine available resources before proceeding with a workflow
+- **Enhanced User Interface Experience**: Display a menu of available resources for selection
+- **Integration with External Services**: Function as a discovery endpoint for external data sources
+
+#### Example Implementation
+
+```typescript
+// Implementation of resources/list method
+export async function resourcesList(params: any = {}): Promise<ResourceListResponse> {
+  const resources = await getAvailableResources();
+  
+  return {
+    resources: resources.map(resource => ({
+      id: resource.id,
+      name: resource.name,
+      description: resource.description,
+      type: resource.type,
+      uri: `resource://${resource.type}/${resource.id}`
+    }))
+  };
+}
+```
+
+### Using Resources in Prompts
+
+Resources can be referenced in prompts using the `@resource-uri` syntax, which gets expanded when the prompt is processed:
+
+```
+You are a development assistant analyzing the codebase at @resource://filesystem/path/to/project.
+
+Focus on the following files:
+@resource://github/repo/owner/name/path/to/file.js
+@resource://database/query/recent-commits
+```
+
+### Integration Pattern with Multiple MCP Servers
+
+When multiple MCP servers are configured together, they can share resources to provide a rich environment for AI assistance:
+
+```mermaid
+flowchart TD
+    A[AI Assistant] -->|Request| B[MCP Prompts Server]
+    B -->|resources/list| C[Resource Discovery]
+    C -->|Discovers| D[Filesystem Resources]
+    C -->|Discovers| E[GitHub Resources]
+    C -->|Discovers| F[Database Resources]
+    
+    B -->|apply_template| G[Template Processing]
+    G -->|Uses| D
+    G -->|Uses| E
+    G -->|Uses| F
+    
+    G -->|Processed Prompt| A
+```
+
+### Configuring Resource Integration
+
+To enable resource integration, configure your MCP Prompts server alongside other MCP servers in your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "prompts": {
+      "command": "npx",
+      "args": ["-y", "@sparesparrow/mcp-prompts"],
+      "env": {
+        "STORAGE_TYPE": "file",
+        "PROMPTS_DIR": "/path/to/prompts",
+        "ENABLE_RESOURCES": "true"
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user/"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "your-token-here"
+      }
+    }
+  }
+}
+```
+
+This configuration allows the prompts server to discover and use resources from both the filesystem and GitHub servers.
+
+## MCP Server Integration
+
+The MCP Prompts Server can be integrated with other specialized MCP servers to enhance its capabilities and provide a more comprehensive solution. This section outlines how to integrate with the Mermaid Diagram Server and the Orchestrator Server.
+
+### Integration with Mermaid Diagram Server
+
+The Mermaid Diagram Server provides tools for generating, analyzing, and modifying Mermaid diagrams using natural language instructions. Integrating this server with the MCP Prompts Server enables visualization of prompts, their relationships, and their usage patterns.
+
+```mermaid
+graph TD
+    User[User/Client] -->|Requests Prompt Visualization| PromptsServer[MCP Prompts Server]
+    PromptsServer -->|Retrieves Prompts| Storage[(Storage Adapter)]
+    PromptsServer -->|Sends Prompt Structure| MermaidServer[Mermaid Diagram Server]
+    MermaidServer -->|Generates Diagram| Diagram[Mermaid Diagram]
+    PromptsServer -->|Returns Visualization| User
+    
+    subgraph Visualization Types
+        PromptRelationships[Prompt Relationships]
+        TemplateStructure[Template Structure]
+        VariableUsage[Variable Usage]
+        ResourceDependencies[Resource Dependencies]
+    end
+    
+    Diagram --> PromptRelationships
+    Diagram --> TemplateStructure
+    Diagram --> VariableUsage
+    Diagram --> ResourceDependencies
+    
+    style PromptsServer fill:#2ecc71,stroke:#27ae60
+    style MermaidServer fill:#3498db,stroke:#2980b9
+    style Diagram fill:#9b59b6,stroke:#8e44ad
+```
+
+#### Use Cases for Mermaid Integration
+
+1. **Prompt Relationship Visualization**: Generate diagrams showing how different prompts are related and categorized.
+2. **Template Structure Representation**: Visualize the structure of complex templates with their variables and conditional blocks.
+3. **Variable Usage Analysis**: Create charts showing how variables are used across different templates.
+4. **Resource Dependencies Graph**: Visualize which prompts depend on which MCP resources.
+5. **Prompt Flow Diagrams**: Create sequence diagrams showing the flow of prompt processing.
+
+### Integration with Orchestrator Server
+
+The Orchestrator Server implements the Orchestrator-Workers pattern to coordinate between multiple specialized servers. Integrating this server with the MCP Prompts Server enables complex workflows that involve multiple steps and servers.
+
+```mermaid
+graph LR
+    User[User/Client] -->|Sends Request| OrchestratorServer[Orchestrator Server]
+    OrchestratorServer -->|Coordinates Tasks| PromptsServer[MCP Prompts Server]
+    OrchestratorServer -->|Coordinates Tasks| MermaidServer[Mermaid Diagram Server]
+    OrchestratorServer -->|Coordinates Tasks| FileServer[Filesystem Server]
+    OrchestratorServer -->|Coordinates Tasks| GitHubServer[GitHub Server]
+    
+    PromptsServer -->|Template Processing| TemplateEngine[Template Engine]
+    MermaidServer -->|Diagram Generation| DiagramGen[Diagram Generator]
+    FileServer -->|File Access| Files[(File Storage)]
+    GitHubServer -->|Repository Access| Repos[(GitHub Repos)]
+    
+    TemplateEngine & DiagramGen & Files & Repos --> OrchestratorServer
+    OrchestratorServer -->|Combined Result| User
+    
+    style OrchestratorServer fill:#e74c3c,stroke:#c0392b
+    style PromptsServer fill:#2ecc71,stroke:#27ae60
+    style MermaidServer fill:#3498db,stroke:#2980b9
+```
+
+#### Orchestration Workflows
+
+```mermaid
+sequenceDiagram
+    participant User as User/Client
+    participant Orchestrator as Orchestrator Server
+    participant Prompts as MCP Prompts Server
+    participant Mermaid as Mermaid Diagram Server
+    participant GitHub as GitHub Server
+    
+    User->>Orchestrator: Request integrated analysis
+    Orchestrator->>GitHub: Fetch repository data
+    GitHub-->>Orchestrator: Repository data
+    
+    Orchestrator->>Prompts: Retrieve relevant prompts
+    Prompts-->>Orchestrator: Processed prompts
+    
+    Orchestrator->>Mermaid: Generate diagrams from data
+    Mermaid-->>Orchestrator: Visualizations
+    
+    Orchestrator->>Prompts: Apply templates to results
+    Prompts-->>Orchestrator: Formatted output
+    
+    Orchestrator-->>User: Complete analysis with visuals
+```
+
+### Multi-Server Project Analysis Pattern
+
+This pattern leverages multiple MCP servers for comprehensive project analysis:
+
+```mermaid
+graph TD
+    User[User/Client] -->|Analysis Request| OrchestratorServer[Orchestrator Server]
+    OrchestratorServer -->|Task 1: Load Project| FileServer[Filesystem Server]
+    OrchestratorServer -->|Task 2: Get Prompts| PromptsServer[MCP Prompts Server]
+    OrchestratorServer -->|Task 3: Analyze Structure| AnalysisEngine[Project Analysis Engine]
+    OrchestratorServer -->|Task 4: Visualize| MermaidServer[Mermaid Diagram Server]
+    
+    FileServer -->|Project Files| OrchestratorServer
+    PromptsServer -->|Analysis Prompts| OrchestratorServer
+    AnalysisEngine -->|Analysis Results| OrchestratorServer
+    MermaidServer -->|Visualizations| OrchestratorServer
+    
+    OrchestratorServer -->|Comprehensive Report| User
+    
+    subgraph Analysis Outputs
+        CodeStructure[Code Structure]
+        DependencyGraph[Dependency Graph]
+        ArchitectureDiagram[Architecture Diagram]
+        DataFlowDiagram[Data Flow Diagram]
+    end
+    
+    OrchestratorServer --> Analysis Outputs
+    
+    style OrchestratorServer fill:#e74c3c,stroke:#c0392b
+    style PromptsServer fill:#2ecc71,stroke:#27ae60
+    style MermaidServer fill:#3498db,stroke:#2980b9
+    style AnalysisEngine fill:#f1c40f,stroke:#f39c12
+```
+
+### Setting Up Integration
+
+To integrate the MCP Prompts Server with the Mermaid and Orchestrator servers, follow these steps:
+
+1. **Configure Server Connections**:
+   ```json
+   {
+     "router": {
+       "port": 3000,
+       "host": "0.0.0.0",
+       "discovery": {
+         "enableAutoDiscovery": true,
+         "refreshInterval": 30000
+       }
+     },
+     "servers": [
+       {
+         "name": "prompts",
+         "url": "http://prompts:3003",
+         "capabilities": ["prompts", "resources", "templates"]
+       },
+       {
+         "name": "mermaid",
+         "url": "http://mermaid:3004",
+         "capabilities": ["diagrams", "visualization"]
+       },
+       {
+         "name": "orchestrator",
+         "url": "http://orchestrator:3005",
+         "capabilities": ["workflows", "coordination"]
+       },
+       {
+         "name": "filesystem",
+         "url": "http://filesystem:3006",
+         "capabilities": ["files", "storage"]
+       },
+       {
+         "name": "postgres",
+         "url": "http://postgres:3007",
+         "capabilities": ["database", "query"]
+       }
+     ]
+   }
+   ```
+
+2. **Enable Resource Sharing**:
+   Set the `ENABLE_RESOURCES` environment variable to `true` for the MCP Prompts Server.
+
+3. **Set Up Docker Compose**:
+   Create a `docker-compose.yml` file that includes all required servers:
+   ```yaml
+   version: "3"
+   services:
+     prompts:
+       image: sparesparrow/mcp-prompts:latest
+       environment:
+         - ENABLE_RESOURCES=true
+         - STORAGE_TYPE=file
+         - PROMPTS_DIR=/app/data/prompts
+       volumes:
+         - ./data:/app/data
+       ports:
+         - "3003:3003"
+     
+     mermaid:
+       image: mcp/mermaid-server:latest
+       ports:
+         - "3004:3000"
+     
+     orchestrator:
+       image: mcp/orchestrator-server:latest
+       ports:
+         - "3005:3000"
+       depends_on:
+         - prompts
+         - mermaid
+   ```
+
+By integrating these servers, you can create powerful workflows that combine prompt management, orchestration, and visualization capabilities.
+
+## Advanced Integration with MCP Router
+
+For more complex deployments, you can use the MCP Router to create a centralized access point for all MCP servers. This enables seamless discovery and routing of requests between servers.
+
+```mermaid
+graph TD
+    Client[Client Application] -->|Requests| Router[MCP Router]
+    
+    Router -->|Prompt Operations| PromptsServer[MCP Prompts Server]
+    Router -->|Diagram Generation| MermaidServer[Mermaid Diagram Server]
+    Router -->|Workflow Orchestration| OrchestratorServer[Orchestrator Server]
+    Router -->|File Operations| FileServer[Filesystem Server]
+    Router -->|Storage Operations| PostgresServer[PostgreSQL Server]
+    
+    PromptsServer <-->|Data Exchange| MermaidServer
+    PromptsServer <-->|Data Exchange| OrchestratorServer
+    PostgresServer <-->|Data Storage| PromptsServer
+    FileServer <-->|File Access| PromptsServer
+    
+    subgraph Service Discovery
+        Router -->|Register Capabilities| Registry[(Capability Registry)]
+        PromptsServer & MermaidServer & OrchestratorServer & FileServer & PostgresServer -->|Register| Registry
+        Registry -->|Service Info| Router
+    end
+    
+    style Router fill:#3498db,stroke:#2980b9,stroke-width:3px
+    style PromptsServer fill:#2ecc71,stroke:#27ae60
+    style MermaidServer fill:#9b59b6,stroke:#8e44ad
+    style OrchestratorServer fill:#e74c3c,stroke:#c0392b
+```
+
+#### Router Configuration
+
+To set up the MCP Router with multiple servers, create a `router-config.json` file:
+
+```json
+{
+  "router": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "discovery": {
+      "enableAutoDiscovery": true,
+      "refreshInterval": 30000
+    }
+  },
+  "servers": [
+    {
+      "name": "prompts",
+      "url": "http://prompts:3003",
+      "capabilities": ["prompts", "resources", "templates"]
+    },
+    {
+      "name": "mermaid",
+      "url": "http://mermaid:3004",
+      "capabilities": ["diagrams", "visualization"]
+    },
+    {
+      "name": "orchestrator",
+      "url": "http://orchestrator:3005",
+      "capabilities": ["workflows", "coordination"]
+    },
+    {
+      "name": "filesystem",
+      "url": "http://filesystem:3006",
+      "capabilities": ["files", "storage"]
+    },
+    {
+      "name": "postgres",
+      "url": "http://postgres:3007",
+      "capabilities": ["database", "query"]
+    }
+  ]
+}
+```
+
+## Use Cases and Integration Examples
+
+### 1. Project Documentation Generator
+
+Use the integrated servers to automatically generate comprehensive project documentation with diagrams:
+
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant Orchestrator as Orchestrator
+    participant FileSystem as Filesystem Server
+    participant Prompts as Prompts Server
+    participant Mermaid as Mermaid Server
+    
+    User->>Orchestrator: Generate Project Documentation
+    Orchestrator->>FileSystem: Fetch Project Structure
+    FileSystem-->>Orchestrator: Directory Structure
+    
+    Orchestrator->>FileSystem: Read Source Files
+    FileSystem-->>Orchestrator: Source Code
+    
+    Orchestrator->>Prompts: Get Documentation Template
+    Prompts-->>Orchestrator: Documentation Template
+    
+    Orchestrator->>Prompts: Apply Template with Code Analysis
+    Prompts-->>Orchestrator: Documentation Draft
+    
+    Orchestrator->>Mermaid: Generate Architecture Diagram
+    Mermaid-->>Orchestrator: Architecture Diagram
+    
+    Orchestrator->>Mermaid: Generate Class Diagrams
+    Mermaid-->>Orchestrator: Class Diagrams
+    
+    Orchestrator->>Mermaid: Generate Sequence Diagrams
+    Mermaid-->>Orchestrator: Sequence Diagrams
+    
+    Orchestrator->>FileSystem: Write Documentation Files
+    FileSystem-->>Orchestrator: Confirmation
+    
+    Orchestrator-->>User: Documentation Complete
+```
+
+### 2. Prompt Visualization Dashboard
+
+Create a dashboard for visualizing and managing prompts with their relationships:
+
+```mermaid
+graph LR
+    User[User] -->|Access| Dashboard[Prompt Dashboard]
+    
+    subgraph Backend Services
+        Dashboard -->|List Prompts| PromptsServer[Prompts Server]
+        Dashboard -->|Generate Diagrams| MermaidServer[Mermaid Server]
+        PromptsServer -->|Prompt Data| MermaidServer
+    end
+    
+    PromptsServer -->|Fetch Prompts| Storage[(Storage)]
+    
+    subgraph Visualization Views
+        MermaidServer -->|Category Graph| CategoryView[Category View]
+        MermaidServer -->|Dependency Graph| DependencyView[Dependency View]
+        MermaidServer -->|Template Structure| TemplateView[Template View]
+        MermaidServer -->|Usage Statistics| UsageView[Usage Stats View]
+    end
+    
+    CategoryView & DependencyView & TemplateView & UsageView --> Dashboard
+    
+    style Dashboard fill:#3498db,stroke:#2980b9
+    style PromptsServer fill:#2ecc71,stroke:#27ae60
+    style MermaidServer fill:#9b59b6,stroke:#8e44ad
+```
+
+### 3. Template-Based Project Generator
+
+Generate new projects using templates and visualize the project structure:
+
+```mermaid
+graph TD
+    User[User] -->|Project Request| OrchestratorServer[Orchestrator Server]
+    
+    OrchestratorServer -->|Get Project Template| PromptsServer[Prompts Server]
+    OrchestratorServer -->|Create Project Structure| FileServer[Filesystem Server]
+    OrchestratorServer -->|Generate Diagrams| MermaidServer[Mermaid Server]
+    
+    PromptsServer -->|Template| OrchestratorServer
+    FileServer -->|Confirmation| OrchestratorServer
+    MermaidServer -->|Project Diagrams| OrchestratorServer
+    
+    OrchestratorServer -->|Complete Project| User
+    
+    subgraph Project Components
+        CodeFiles[Source Code Files]
+        ConfigFiles[Configuration Files]
+        DocFiles[Documentation Files]
+        DiagramFiles[Diagram Files]
+    end
+    
+    OrchestratorServer --> Project Components
+    
+    style OrchestratorServer fill:#e74c3c,stroke:#c0392b
+    style PromptsServer fill:#2ecc71,stroke:#27ae60
+    style MermaidServer fill:#9b59b6,stroke:#8e44ad
+    style FileServer fill:#f1c40f,stroke:#f39c12
+```
+
+### Docker Compose for Full Integration
+
+Here's a complete Docker Compose configuration for integrating all servers with the MCP Router:
+
+```yaml
+version: "3"
+services:
+  router:
+    image: mcp/router:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./router-config.json:/app/router-config.json
+    command: ["--config", "/app/router-config.json"]
+    
+  prompts:
+    image: sparesparrow/mcp-prompts:latest
+    environment:
+      - ENABLE_RESOURCES=true
+      - STORAGE_TYPE=file
+      - PROMPTS_DIR=/app/data/prompts
+      - HTTP_SERVER=true
+      - PORT=3003
+      - HOST=0.0.0.0
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "3003:3003"
+    
+  mermaid:
+    image: mcp/mermaid-server:latest
+    ports:
+      - "3004:3004"
+    
+  orchestrator:
+    image: mcp/orchestrator-server:latest
+    ports:
+      - "3005:3005"
+    
+  filesystem:
+    image: mcp/filesystem-server:latest
+    volumes:
+      - ./data:/data
+    ports:
+      - "3006:3006"
+    
+  postgres:
+    image: postgres:14
+    environment:
+      - POSTGRES_USER=mcp
+      - POSTGRES_PASSWORD=mcp_password
+      - POSTGRES_DB=mcp_prompts
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    
+  postgres-server:
+    image: mcp/postgres-server:latest
+    environment:
+      - POSTGRES_CONNECTION_STRING=postgresql://mcp:mcp_password@postgres:5432/mcp_prompts
+    ports:
+      - "3007:3007"
+    depends_on:
+      - postgres
+
+volumes:
+  pg_data:
+```
+
+This integration approach provides a complete ecosystem for managing prompts, creating visualizations, orchestrating workflows, and persisting data.

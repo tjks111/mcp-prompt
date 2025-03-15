@@ -75,13 +75,13 @@ function run_unit_tests {
   echo "Running unit tests in Docker..."
   
   if [ "$WATCH_MODE" = true ]; then
-    docker compose -f docker-compose.test.yml run --rm mcp-test npm run test:unit -- --watch
+    docker compose -f docker-compose.yml -f docker/docker-compose.test.yml run --rm mcp-unit-tests npm run test:unit -- --watch
   else
     COMMAND="npm run test:unit"
     if [ "$COVERAGE" = true ]; then
       COMMAND="$COMMAND -- --coverage --coverageDirectory=/app/test-results/coverage-unit"
     fi
-    docker compose -f docker-compose.test.yml run --rm mcp-test $COMMAND
+    docker compose -f docker-compose.yml -f docker/docker-compose.test.yml run --rm mcp-unit-tests $COMMAND
   fi
 }
 
@@ -90,13 +90,13 @@ function run_integration_tests {
   echo "Running integration tests in Docker..."
   
   if [ "$WATCH_MODE" = true ]; then
-    docker compose -f docker-compose.test.yml run --rm mcp-test npm run test:integration -- --watch
+    docker compose -f docker-compose.yml -f docker/docker-compose.test.yml run --rm mcp-integration-tests npm run test:integration -- --watch
   else
     COMMAND="npm run test:integration"
     if [ "$COVERAGE" = true ]; then
       COMMAND="$COMMAND -- --coverage --coverageDirectory=/app/test-results/coverage-integration"
     fi
-    docker compose -f docker-compose.test.yml run --rm mcp-test $COMMAND
+    docker compose -f docker-compose.yml -f docker/docker-compose.test.yml run --rm mcp-integration-tests $COMMAND
   fi
 }
 
@@ -104,15 +104,15 @@ function run_integration_tests {
 function run_health_check_tests {
   echo "Running health check tests in Docker..."
   
-  docker compose -f docker-compose.health-check.yml up --build -d
-  docker compose -f docker-compose.health-check.yml logs -f test-runner
+  docker compose -f docker-compose.yml -f docker/docker-compose.test.yml --profile health-check up --build -d
+  docker compose -f docker-compose.yml -f docker/docker-compose.test.yml --profile health-check logs -f mcp-health-check-tests
   
   # Wait for test runner to complete
   echo "Waiting for tests to complete..."
-  docker wait mcp-health-test-runner
+  docker wait mcp-health-check-tests
   
   # Check exit code
-  EXIT_CODE=$(docker inspect mcp-health-test-runner --format='{{.State.ExitCode}}')
+  EXIT_CODE=$(docker inspect mcp-health-check-tests --format='{{.State.ExitCode}}')
   if [ "$EXIT_CODE" != "0" ]; then
     echo "Health check tests failed with exit code $EXIT_CODE"
     if [ "$CLEAN_UP" = true ]; then
@@ -131,13 +131,13 @@ function run_health_check_tests {
 # Clean up Docker resources for regular tests
 function clean_up_regular {
   echo "Cleaning up Docker resources..."
-  docker compose -f docker-compose.test.yml down -v
+  docker compose -f docker-compose.yml -f docker/docker-compose.test.yml down -v
 }
 
 # Clean up Docker resources for health check tests
 function clean_up_health_check {
   echo "Cleaning up health check Docker resources..."
-  docker compose -f docker-compose.health-check.yml down -v
+  docker compose -f docker-compose.yml -f docker/docker-compose.test.yml --profile health-check down -v
 }
 
 # Run all tests

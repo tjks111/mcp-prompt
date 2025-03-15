@@ -1,11 +1,24 @@
+/**
+ * Release Script Test
+ * 
+ * This test verifies that the release script is working correctly.
+ * It uses child_process to execute the script with mock arguments
+ * and validates the output.
+ */
+
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+// Convert import.meta.url to a path
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 describe('Release Script', () => {
   const SCRIPT_PATH = path.resolve(__dirname, '../../scripts/release.sh');
   
-  // Skip the test if file doesn't exist
+  // Skip the test if the file doesn't exist
   const runTest = fs.existsSync(SCRIPT_PATH);
   
   // Helper function to execute the script with arguments
@@ -58,5 +71,9 @@ describe('Release Script', () => {
     expect(output).toContain('Invalid version type: invalid');
     expect(output).toContain('Must be one of: patch, minor, major');
   });
-});
-EOL 
+  
+  // Note: We can't effectively test the actual version bump and publish
+  // functionality without mocking npm and git commands, which is beyond
+  // the scope of this test. We're mainly testing the script's validation
+  // and help functionality.
+}); 

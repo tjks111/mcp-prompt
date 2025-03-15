@@ -1,0 +1,83 @@
+# Testing configuration for MCP Prompts
+
+services:
+  # Unit tests
+  mcp-unit-tests:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.test
+    image: sparesparrow/mcp-prompts:test
+    container_name: mcp-unit-tests
+    environment:
+      - NODE_ENV=test
+    volumes:
+      - ./coverage:/app/coverage
+    command: npm run test:unit
+    networks:
+      - mcp-network
+
+  # Integration tests
+  mcp-integration-tests:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.test
+    image: sparesparrow/mcp-prompts:test
+    container_name: mcp-integration-tests
+    environment:
+      - NODE_ENV=test
+      - PG_HOST=postgres-test
+      - PG_PORT=5432
+      - PG_USER=postgres
+      - PG_PASSWORD=postgres
+      - PG_DATABASE=mcp_prompts_test
+      - DOCKER_TEST=true
+    volumes:
+      - ./coverage:/app/coverage
+    command: npm run test:integration
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    networks:
+      - mcp-network
+
+  # PostgreSQL for tests
+  postgres-test:
+    image: postgres:14-alpine
+    container_name: mcp-postgres-test
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mcp_prompts_test
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - mcp-network
+
+  # Health check tests
+  mcp-health-check-tests:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.test
+    image: sparesparrow/mcp-prompts:test
+    container_name: mcp-health-check-tests
+    environment:
+      - NODE_ENV=test
+      - TEST_DOCKER_HEALTH=true
+    volumes:
+      - ./coverage:/app/coverage
+    command: npm run test -- tests/integration/docker-health-check.test.ts
+    profiles:
+      - health-check
+    networks:
+      - mcp-network
+
+volumes:
+  postgres_test_data:
+

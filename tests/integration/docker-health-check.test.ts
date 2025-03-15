@@ -8,11 +8,16 @@
  * TEST_DOCKER_HEALTH=true npm test -- tests/integration/docker-health-check.test.ts
  */
 
-describe('Docker Health Check', () => {
-  const HEALTH_CHECK_URL = process.env.HEALTH_CHECK_URL || 'http://localhost:3003/health';
+import { jest } from '@jest/globals';
 
+describe('Docker Health Check', () => {
   // Skip tests if not in Docker environment or explicitly enabled
   const runTests = process.env.TEST_DOCKER_HEALTH === 'true';
+  
+  // Set longer timeout for these tests
+  jest.setTimeout(10000);
+  
+  const HEALTH_CHECK_URL = process.env.HEALTH_CHECK_URL || 'http://localhost:3003/health';
   
   // Helper function to fetch health status with improved error handling
   async function fetchHealthStatus(): Promise<{ status: number; data: any }> {
@@ -37,9 +42,6 @@ describe('Docker Health Check', () => {
       };
     }
   }
-  
-  // Set longer timeout for these tests
-  jest.setTimeout(10000);
 
   it('health check endpoint should return 200 status', async () => {
     if (!runTests) {
