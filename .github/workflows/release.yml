@@ -67,7 +67,7 @@ jobs:
     needs: [create-metadata]
     if: ${{ needs.create-metadata.outputs.npm_packages != '[]' || needs.create-metadata.outputs.pypi_packages != '[]' }}
     runs-on: ubuntu-latest
-    environment: release
+    environment: github-pages
     outputs:
       changes_made: ${{ steps.commit.outputs.changes_made }}
     steps:
@@ -109,7 +109,7 @@ jobs:
       matrix:
         package: ${{ fromJson(needs.create-metadata.outputs.pypi_packages) }}
     name: Build ${{ matrix.package }}
-    environment: release
+    environment: github-pages
     permissions:
       id-token: write # Required for trusted publishing
     runs-on: ubuntu-latest
@@ -150,7 +150,7 @@ jobs:
       matrix:
         package: ${{ fromJson(needs.create-metadata.outputs.npm_packages) }}
     name: Build ${{ matrix.package }}
-    environment: release
+    environment: github-pages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -192,7 +192,7 @@ jobs:
     needs: [update-packages, create-metadata, publish-pypi, publish-npm]
     if: needs.update-packages.outputs.changes_made == 'true'
     runs-on: ubuntu-latest
-    environment: release
+    environment: github-pages
     permissions:
       contents: write
     steps:

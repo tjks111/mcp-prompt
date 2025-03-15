@@ -69,7 +69,7 @@ jobs:
         package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
     name: Publish ${{ matrix.package }}
 
-    environment: release
+    environment: github-pages
     permissions:
       id-token: write # Required for trusted publishing
 
