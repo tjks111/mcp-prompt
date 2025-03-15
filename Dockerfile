@@ -68,7 +68,7 @@ VOLUME ["/app/data"]
 LABEL org.opencontainers.image.authors="modelcontextprotocol"
 LABEL org.opencontainers.image.title="mcp-prompts"
 LABEL org.opencontainers.image.description="MCP server for managing prompts and templates"
-LABEL org.opencontainers.image.documentation="https://github.com/sparesparrow/mcp-prompts"
+LABEL org.opencontainers.image.documentation="https://github.com/modelcontextprotocol/mcp-prompts"
 LABEL org.opencontainers.image.vendor="Model Context Protocol"
 LABEL org.opencontainers.image.licenses="MIT"
 
@@ -80,4 +80,4 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
   CMD wget -q --spider http://localhost:3003/health || exit 1
 
 # Run the application
-CMD ["node", "build/index.js"] 
+CMD ["node", "build/index.js"]
