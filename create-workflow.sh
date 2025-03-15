@@ -1,3 +1,8 @@
+#!/bin/bash
+
+mkdir -p .github/workflows/
+
+cat > .github/workflows/ci.yml << 'EOF'
 name: CI/CD Pipeline
 
 on:

@@ -48,24 +48,24 @@ COPY --from=build /app/config ./config
 RUN cp ./package.json ./build/package.json
 
 # Create a non-root user with a home directory
-RUN adduser -D -h /home/mcprompts mcprompts
+RUN adduser -D -h /home/mcp mcp
 
 # Create data directory with correct permissions
 RUN mkdir -p /app/data/prompts /app/data/backups && \
-    chown -R mcprompts:mcprompts /app/data
+    chown -R mcp:mcp /app/data
 
 # Set the user
-USER mcprompts
+USER mcp
 
 # Create volume for data persistence
 VOLUME ["/app/data"]
 
 # Add image metadata
-LABEL org.opencontainers.image.authors="modelcontextprotocol"
+LABEL org.opencontainers.image.authors="sparesparrow"
 LABEL org.opencontainers.image.title="mcp-prompts"
 LABEL org.opencontainers.image.description="MCP server for managing prompts and templates"
-LABEL org.opencontainers.image.documentation="https://github.com/modelcontextprotocol/mcp-prompts"
-LABEL org.opencontainers.image.vendor="Model Context Protocol"
+LABEL org.opencontainers.image.documentation="https://github.com/sparesparrow/mcp-prompts"
+LABEL org.opencontainers.image.vendor="sparesparrow"
 LABEL org.opencontainers.image.licenses="MIT"
 
 # Expose the port

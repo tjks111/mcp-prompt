@@ -1,4 +1,4 @@
-version: '3.8'
+name: mcp-prompts-test-environment
 
 services:
   # PostgreSQL database for testing
@@ -19,8 +19,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
-    networks:
-      - mcp-test-network
 
   # Test runner service
   mcp-test:
@@ -43,10 +41,4 @@ services:
       - TEST_INTEGRATION=true
     volumes:
       - ./test-results:/app/test-results
-    command: npm test
-    networks:
-      - mcp-test-network
-
-networks:
-  mcp-test-network:
-    driver: bridge 
+    command: npm test 

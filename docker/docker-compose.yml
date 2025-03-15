@@ -52,3 +52,11 @@ volumes:
     name: mcp-postgres-data
   mcp-data:
     name: mcp-prompts-data 
+
+networks:
+  mcp-network:
+    driver: bridge
+    external: true
+    ipam:
+      config:
+        - subnet: 172.35.0.0/16 

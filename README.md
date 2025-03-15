@@ -28,10 +28,13 @@ This server provides a simple way to store, retrieve, and apply templates for AI
 - [Storage Adapters](#storage-adapters)
   - [PostgreSQL Setup](#postgresql-setup)
 - [Docker Deployment](#docker-deployment)
-  - [Simple Deployment](#simple-deployment)
-  - [PostgreSQL Deployment](#postgresql-deployment)
-  - [Development Environment](#development-environment)
-  - [Custom Configurations](#custom-configurations)
+  - [Docker Compose Orchestration](#docker-compose-orchestration)
+    - [Simple Deployment](#simple-deployment)
+    - [PostgreSQL Deployment](#postgresql-deployment)
+    - [Development Environment](#development-environment)
+    - [Testing Environment](#testing-environment)
+    - [Docker Management Script](#docker-management-script)
+    - [Custom Configurations](#custom-configurations)
 - [Development](#development)
   - [Development Workflow](#development-workflow)
   - [Development Commands](#development-commands)
@@ -462,69 +465,92 @@ POSTGRES_CONNECTION_STRING=postgresql://user:password@host:port/database
 
 ## Docker Deployment
 
-The MCP Prompts Server can be deployed using Docker and Docker Compose in several configurations:
+### Docker Compose Orchestration
 
-### Simple Deployment
+The MCP Prompts Server offers various Docker Compose configurations for different deployment scenarios:
 
-For a basic setup using the default file storage:
-
+#### Simple Deployment
 ```bash
-# Using docker-compose.yml
 docker compose up -d
 ```
+This will deploy the MCP Prompts server using file storage on port 3003.
 
-This deploys:
-- The MCP Prompts server using file storage on port 3003
-
-### PostgreSQL Deployment
-
-For a setup using PostgreSQL as the storage backend:
-
+#### PostgreSQL Deployment
 ```bash
-# Using docker-compose.postgres.yml
 docker compose -f docker-compose.postgres.yml up -d
 ```
-
 This deploys:
 - A PostgreSQL database server
-- The MCP Prompts server configured to use PostgreSQL storage
-- Adminer for database management (available at http://localhost:8080)
+- The MCP Prompts server configured for PostgreSQL
+- Adminer for database management at http://localhost:8080
 
-### Development Environment
-
-For a development environment with hot reloading:
-
+#### Development Environment
 ```bash
-# Using docker-compose.dev.yml
 docker compose -f docker-compose.dev.yml up -d
 ```
+This sets up a development environment with hot reloading. It mounts the source code from your local directory and includes Adminer.
 
-This deploys:
-- A PostgreSQL database server
-- The MCP Prompts server in development mode with source code mounted from your local directory
-- Adminer for database management
+#### Testing Environment
+```bash
+docker compose -f docker-compose.test.yml up --build
+```
+This creates a dedicated testing environment with:
+- A temporary PostgreSQL instance with test data
+- An isolated test runner container that executes all tests
+- Test results saved to the ./test-results directory
 
-### Custom Configurations
+#### Docker Management Script
 
-You can also create your own Docker Compose configuration by extending our base configurations:
+To simplify Docker Compose operations, use the provided management script:
+
+```bash
+# Start development environment
+./scripts/docker-manage.sh start dev
+
+# Run tests in Docker
+./scripts/docker-manage.sh test
+
+# View logs from production environment
+./scripts/docker-manage.sh logs prod
+
+# Clean up test environment
+./scripts/docker-manage.sh clean test
+
+# Show help
+./scripts/docker-manage.sh help
+```
+
+The management script supports the following commands:
+- `start`: Start Docker containers
+- `stop`: Stop Docker containers
+- `restart`: Restart Docker containers
+- `logs`: Show logs from containers
+- `clean`: Remove containers, networks, and volumes
+- `build`: Build Docker images
+- `test`: Run tests in Docker containers
+
+And the following environments:
+- `dev`: Development environment (default)
+- `test`: Testing environment
+- `prod`: Production environment
+
+#### Custom Configurations
+You can create your own custom Docker Compose configuration by extending the base configurations:
 
 ```yaml
-# Example custom-compose.yml
-version: "3.8"
+# custom-compose.yml
+version: '3.8'
+
+include:
+  - docker-compose.yml
 
 services:
   mcp-prompts:
-    extends:
-      file: docker-compose.yml
-      service: mcp-file
     environment:
-      - CUSTOM_ENV_VAR=value
-    volumes:
-      - ./my-prompts:/app/data/prompts
+      - CUSTOM_ENV=value
 ```
 
-To run your custom configuration:
-
+Then run it with:
 ```bash
 docker compose -f custom-compose.yml up -d
 ```
@@ -613,6 +639,41 @@ Run the MCP Inspector for testing:
 ```bash
 npm run test:inspector
 ```
+
+#### Comprehensive Test Scripts
+
+For more advanced testing options, use the provided test script:
+
+```bash
+# Run all tests (unit and integration)
+./scripts/run-tests.sh
+
+# Run only unit tests
+./scripts/run-tests.sh --unit
+
+# Run only integration tests
+./scripts/run-tests.sh --integration
+
+# Generate test coverage report
+./scripts/run-tests.sh --coverage
+
+# Run tests in Docker
+./scripts/run-tests.sh --docker
+
+# Clean up Docker resources after testing
+./scripts/run-tests.sh --docker --clean
+```
+
+#### Docker Container Health Testing
+
+To test the health of Docker containers:
+
+```bash
+# Run the Docker health check tests
+TEST_DOCKER_HEALTH=true npm test -- tests/integration/docker-health.integration.test.ts
+```
+
+This test verifies that the health check endpoint is working correctly when the MCP-Prompts server is running in a Docker container.
 
 ### Directory Structure
 

@@ -1,10 +1,10 @@
 version: "3.8"
 
-name: mcp-prompts-dev
+name: mcp-prompts-dev-environment
 
 services:
   # PostgreSQL database for development
-  postgres:
+  postgres-dev:
     image: postgres:14-alpine
     container_name: mcp-postgres-dev
     environment:
@@ -14,60 +14,56 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_dev_data:/var/lib/postgresql/data
+      - postgres-dev-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
-    networks:
-      - mcp-dev-network
+      start_period: 5s
 
-  # MCP Prompts Server in development mode
-  mcp-dev:
+  # Adminer for database management
+  adminer:
+    image: adminer
+    container_name: mcp-adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres-dev
+
+  # MCP Prompts server with hot reloading
+  mcp-prompts-dev:
     build:
       context: .
       dockerfile: Dockerfile.dev
     container_name: mcp-prompts-dev
+    depends_on:
+      postgres-dev:
+        condition: service_healthy
     environment:
       - NODE_ENV=development
-      - STORAGE_TYPE=file
-      - PROMPTS_DIR=/app/data/prompts
-      - BACKUPS_DIR=/app/data/backups
-      - LOG_LEVEL=debug
+      - STORAGE_TYPE=postgres
+      - PG_HOST=postgres-dev
+      - PG_PORT=5432
+      - PG_DATABASE=mcp_prompts_dev
+      - PG_USER=postgres
+      - PG_PASSWORD=postgres
+      - PG_SSL=false
       - HTTP_SERVER=true
       - PORT=3003
       - HOST=0.0.0.0
-    volumes:
-      - .:/app
-      - dev_storage:/app/data
-      - node_modules:/app/node_modules
+      - LOG_LEVEL=debug
     ports:
       - "3003:3003"
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./prompts:/app/prompts
+      - ./node_modules:/app/node_modules
     command: npm run dev
-    restart: unless-stopped
-    networks:
-      - mcp-dev-network
-
-  # Adminer for database management
-  adminer:
-    image: adminer:latest
-    container_name: mcp-adminer-dev
-    depends_on:
-      - postgres
-    ports:
-      - "8080:8080"
-    restart: unless-stopped
-    networks:
-      - mcp-dev-network
 
 volumes:
-  postgres_dev_data:
-    name: mcp-postgres-dev-data
-  dev_storage:
-    name: mcp-dev-storage
-  node_modules:
+  postgres-dev-data:
 
 networks:
   mcp-dev-network:

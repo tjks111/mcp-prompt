@@ -9,8 +9,15 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import * as fs from "fs/promises";
 import * as path from "path";
-import { createStorageAdapter } from "./adapters-consolidated.js";
+import { createStorageAdapter } from "./adapters.js";
 import { Prompt, ServerConfig, StorageAdapter } from "./interfaces/index.js";
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { FileStorageAdapter, MemoryStorageAdapter, PostgresStorageAdapter } from './adapters/index.js';
+
+// Get the directory name of the current module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Configuration with defaults
 const DEFAULT_CONFIG: ServerConfig = {
@@ -87,7 +94,7 @@ async function initializeDefaultPrompts() {
   try {
     console.error("Adding default prompts...");
     const existingPrompts = await storageAdapter.listPrompts();
-    
+  
     if (existingPrompts.length === 0) {
       for (const promptData of DEFAULT_PROMPTS) {
         await storageAdapter.savePrompt(promptData);
@@ -114,12 +121,12 @@ async function main() {
     console.error("Starting MCP Prompts Server...");
     
     // Create and connect to storage
-    storageAdapter = createStorageAdapter(DEFAULT_CONFIG);
+    storageAdapter = await createStorageAdapter(DEFAULT_CONFIG);
     await storageAdapter.connect();
     
     // Initialize default prompts
     await initializeDefaultPrompts();
-    
+  
     // Create MCP server
     const server = new McpServer(
       {
@@ -154,36 +161,47 @@ async function main() {
     ];
 
     // Register the resources/list method handler
-    server.method(
+    server.tool(
       "resources/list",
+      {},
       async () => {
         return {
-          resources: resourcesList
+          type: "object",
+          object: {
+            resources: resourcesList
+          }
         };
       }
     );
 
     // Register the prompts/list method handler
-    server.method(
+    server.tool(
       "prompts/list",
+      {},
       async () => {
         const prompts = await storageAdapter.listPrompts();
         return {
+          type: "object",
+          object: {
           prompts: prompts.map(prompt => ({
             id: prompt.id,
             name: prompt.name,
             description: prompt.description || "",
             isTemplate: prompt.isTemplate || false
           }))
+          }
         };
       }
     );
 
     // Register the tools/list method handler
-    server.method(
+    server.tool(
       "tools/list",
+      {},
       async () => {
         return {
+        type: "object",
+        object: {
           tools: [
             {
               name: "add_prompt",
@@ -267,7 +285,7 @@ async function main() {
               }
             }
           ]
-        };
+        }};
       }
     );
 
@@ -295,13 +313,13 @@ async function main() {
         return {
           type: "object",
           object: prompt,
-        };
-      }
-    );
-    
-    server.tool(
-      "get_prompt",
-      {
+      };
+    }
+  );
+
+  server.tool(
+    "get_prompt",
+    {
         id: z.string(),
       },
       async (params) => {
@@ -312,7 +330,7 @@ async function main() {
             object: prompt,
           };
         } catch (error) {
-          return {
+        return {
             type: "error",
             error: `Prompt not found: ${params.id}`,
           };
@@ -341,8 +359,8 @@ async function main() {
             variables: params.variables,
             tags: params.tags,
           });
-          
-          return {
+      
+      return {
             type: "object",
             object: updatedPrompt,
           };
@@ -355,9 +373,9 @@ async function main() {
       }
     );
     
-    server.tool(
-      "list_prompts",
-      {
+  server.tool(
+    "list_prompts",
+    {
         isTemplate: z.boolean().optional(),
         tags: z.array(z.string()).optional(),
         search: z.string().optional(),
@@ -390,7 +408,7 @@ async function main() {
             object: { success: true },
           };
         } catch (error) {
-          return {
+      return {
             type: "error",
             error: `Error deleting prompt: ${error.message}`,
           };
@@ -398,26 +416,26 @@ async function main() {
       }
     );
     
-    server.tool(
-      "apply_template",
-      {
-        id: z.string(),
+  server.tool(
+    "apply_template",
+    {
+      id: z.string(),
         variables: z.record(z.string()),
       },
       async (params) => {
         try {
           const prompt = await storageAdapter.getPrompt(params.id);
-          
-          if (!prompt.isTemplate) {
-            return {
+      
+      if (!prompt.isTemplate) {
+        return {
               type: "error",
               error: `Prompt is not a template: ${params.id}`,
             };
           }
           
           const content = applyTemplate(prompt.content, params.variables);
-          
-          return {
+      
+      return {
             type: "object",
             object: {
               content,
@@ -435,8 +453,8 @@ async function main() {
     );
     
     // Connect to transport
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
     
     console.error("MCP Prompts Server started");
   } catch (error) {

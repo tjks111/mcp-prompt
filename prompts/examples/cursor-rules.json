@@ -1,8 +1,0 @@
-{
-  "id": "cursor-rules-instructions",
-  "name": "Cursor Rules for Thread Instructions",
-  "description": "Initial prompt containing the Cursor rules and guidelines followed in this thread to guide coding actions.",
-  "content": "Thread Cursor Rules:\n\n1. Analyze problems thoroughly before proposing fixes.\n2. Offer alternative solutions when queries are ambiguous.\n3. Propose clear plans and call necessary tools before making modifications.\n4. Maintain concise, modular, and TypeScript-compliant code.\n5. Reuse contextual information and adhere to project-specific guidelines.\n6. Cite relevant sources when referencing documentation or external information.\n7. Follow best practices for Docker, CI workflows, and MCP server deployment.\n\nThese guidelines are based on Cursor documentation and best practices.",
-  "isTemplate": false,
-  "tags": ["cursor", "rules", "guidelines"]
-} 
