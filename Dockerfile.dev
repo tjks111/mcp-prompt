@@ -1,0 +1,19 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Set env to indicate development environment
+ENV NODE_ENV=development
+
+# Install development dependencies
+COPY package.json package-lock.json ./
+RUN npm install
+
+# Create directories for storage
+RUN mkdir -p /app/data/prompts /app/data/backups
+
+# Expose port for the server
+EXPOSE 3003
+
+# Default command for development with hot reloading
+CMD ["npm", "run", "dev"] 
