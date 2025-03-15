@@ -9,7 +9,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import * as fs from "fs/promises";
 import * as path from "path";
-import { createStorageAdapter } from "./adapters/index.js";
+import { createStorageAdapter } from "./adapters-consolidated.js";
 import { Prompt, ServerConfig, StorageAdapter } from "./interfaces/index.js";
 
 // Configuration with defaults
@@ -127,187 +127,310 @@ async function main() {
         version: DEFAULT_CONFIG.version,
       },
       {
-        tools: {
-          add_prompt: {
-            description: "Add a new prompt",
-            parameters: {
-              type: "object",
-              properties: {
-                name: { type: "string" },
-                content: { type: "string" },
-                description: { type: "string", optional: true },
-                isTemplate: { type: "boolean", optional: true },
-                variables: { type: "array", items: { type: "string" }, optional: true },
-                tags: { type: "array", items: { type: "string" }, optional: true },
-              },
-              required: ["name", "content"],
-            },
-            handler: async (params) => {
-              const prompt = await storageAdapter.savePrompt({
-                name: params.name,
-                content: params.content,
-                description: params.description,
-                isTemplate: params.isTemplate || false,
-                variables: params.variables || [],
-                tags: params.tags || [],
-              });
-              
-              return {
+        capabilities: {
+          resources: { subscribe: false },
+          tools: { listChanged: false },
+          prompts: { listChanged: false }
+        }
+      }
+    );
+    
+    // Define resources
+    const resourcesList = [
+      {
+        id: "prompt",
+        name: "Prompt",
+        description: "A prompt or template stored in the system",
+        resourcePattern: "prompt://{id}",
+        listPattern: "prompt://",
+      },
+      {
+        id: "templates",
+        name: "Templates",
+        description: "All available template prompts",
+        resourcePattern: "templates://",
+        listPattern: undefined,
+      }
+    ];
+
+    // Register the resources/list method handler
+    server.method(
+      "resources/list",
+      async () => {
+        return {
+          resources: resourcesList
+        };
+      }
+    );
+
+    // Register the prompts/list method handler
+    server.method(
+      "prompts/list",
+      async () => {
+        const prompts = await storageAdapter.listPrompts();
+        return {
+          prompts: prompts.map(prompt => ({
+            id: prompt.id,
+            name: prompt.name,
+            description: prompt.description || "",
+            isTemplate: prompt.isTemplate || false
+          }))
+        };
+      }
+    );
+
+    // Register the tools/list method handler
+    server.method(
+      "tools/list",
+      async () => {
+        return {
+          tools: [
+            {
+              name: "add_prompt",
+              description: "Add a new prompt",
+              parameters: {
                 type: "object",
-                object: prompt,
-              };
-            },
-          },
-          get_prompt: {
-            description: "Get a prompt by ID",
-            parameters: {
-              type: "object",
-              properties: {
-                id: { type: "string" },
-              },
-              required: ["id"],
-            },
-            handler: async (params) => {
-              try {
-                const prompt = await storageAdapter.getPrompt(params.id);
-                return {
-                  type: "object",
-                  object: prompt,
-                };
-              } catch (error) {
-                return {
-                  type: "error",
-                  error: `Prompt not found: ${params.id}`,
-                };
-              }
-            },
-          },
-          update_prompt: {
-            description: "Update a prompt",
-            parameters: {
-              type: "object",
-              properties: {
-                id: { type: "string" },
-                name: { type: "string", optional: true },
-                content: { type: "string", optional: true },
-                description: { type: "string", optional: true },
-                isTemplate: { type: "boolean", optional: true },
-                variables: { type: "array", items: { type: "string" }, optional: true },
-                tags: { type: "array", items: { type: "string" }, optional: true },
-              },
-              required: ["id"],
-            },
-            handler: async (params) => {
-              try {
-                const updatedPrompt = await storageAdapter.updatePrompt(params.id, {
-                  name: params.name,
-                  content: params.content,
-                  description: params.description,
-                  isTemplate: params.isTemplate,
-                  variables: params.variables,
-                  tags: params.tags,
-                });
-                
-                return {
-                  type: "object",
-                  object: updatedPrompt,
-                };
-              } catch (error) {
-                return {
-                  type: "error",
-                  error: `Error updating prompt: ${error.message}`,
-                };
-              }
-            },
-          },
-          list_prompts: {
-            description: "List all prompts with optional filtering",
-            parameters: {
-              type: "object",
-              properties: {
-                isTemplate: { type: "boolean", optional: true },
-                tags: { type: "array", items: { type: "string" }, optional: true },
-                search: { type: "string", optional: true },
-                limit: { type: "number", optional: true },
-                offset: { type: "number", optional: true },
-              },
-            },
-            handler: async (params) => {
-              const prompts = await storageAdapter.listPrompts(params);
-              
-              return {
-                type: "object",
-                object: {
-                  prompts,
-                  total: prompts.length,
+                properties: {
+                  name: { type: "string" },
+                  content: { type: "string" },
+                  description: { type: "string", optional: true },
+                  isTemplate: { type: "boolean", optional: true },
+                  variables: { type: "array", items: { type: "string" }, optional: true },
+                  tags: { type: "array", items: { type: "string" }, optional: true }
                 },
-              };
-            },
-          },
-          delete_prompt: {
-            description: "Delete a prompt",
-            parameters: {
-              type: "object",
-              properties: {
-                id: { type: "string" },
-              },
-              required: ["id"],
-            },
-            handler: async (params) => {
-              try {
-                await storageAdapter.deletePrompt(params.id);
-                return {
-                  type: "object",
-                  object: { success: true },
-                };
-              } catch (error) {
-                return {
-                  type: "error",
-                  error: `Error deleting prompt: ${error.message}`,
-                };
+                required: ["name", "content"]
               }
             },
-          },
-          apply_template: {
-            description: "Apply variables to a template",
-            parameters: {
-              type: "object",
-              properties: {
-                id: { type: "string" },
-                variables: { type: "object" },
-              },
-              required: ["id", "variables"],
+            {
+              name: "get_prompt",
+              description: "Get a prompt by ID",
+              parameters: {
+                type: "object",
+                properties: {
+                  id: { type: "string" }
+                },
+                required: ["id"]
+              }
             },
-            handler: async (params) => {
-              try {
-                const prompt = await storageAdapter.getPrompt(params.id);
-                
-                if (!prompt.isTemplate) {
-                  return {
-                    type: "error",
-                    error: `Prompt is not a template: ${params.id}`,
-                  };
+            {
+              name: "update_prompt",
+              description: "Update a prompt",
+              parameters: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  name: { type: "string", optional: true },
+                  content: { type: "string", optional: true },
+                  description: { type: "string", optional: true },
+                  isTemplate: { type: "boolean", optional: true },
+                  variables: { type: "array", items: { type: "string" }, optional: true },
+                  tags: { type: "array", items: { type: "string" }, optional: true }
+                },
+                required: ["id"]
+              }
+            },
+            {
+              name: "list_prompts",
+              description: "List all prompts with optional filtering",
+              parameters: {
+                type: "object",
+                properties: {
+                  isTemplate: { type: "boolean", optional: true },
+                  tags: { type: "array", items: { type: "string" }, optional: true },
+                  search: { type: "string", optional: true },
+                  limit: { type: "number", optional: true },
+                  offset: { type: "number", optional: true }
                 }
-                
-                const content = applyTemplate(prompt.content, params.variables);
-                
-                return {
-                  type: "object",
-                  object: {
-                    content,
-                    originalPrompt: prompt,
-                    appliedVariables: params.variables,
-                  },
-                };
-              } catch (error) {
-                return {
-                  type: "error",
-                  error: `Error applying template: ${error.message}`,
-                };
               }
             },
+            {
+              name: "delete_prompt",
+              description: "Delete a prompt",
+              parameters: {
+                type: "object",
+                properties: {
+                  id: { type: "string" }
+                },
+                required: ["id"]
+              }
+            },
+            {
+              name: "apply_template",
+              description: "Apply variables to a template",
+              parameters: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  variables: { type: "object" }
+                },
+                required: ["id", "variables"]
+              }
+            }
+          ]
+        };
+      }
+    );
+
+    // Register tool handlers
+    server.tool(
+      "add_prompt",
+      {
+        name: z.string(),
+        content: z.string(),
+        description: z.string().optional(),
+        isTemplate: z.boolean().optional(),
+        variables: z.array(z.string()).optional(),
+        tags: z.array(z.string()).optional(),
+      },
+      async (params) => {
+        const prompt = await storageAdapter.savePrompt({
+          name: params.name,
+          content: params.content,
+          description: params.description,
+          isTemplate: params.isTemplate || false,
+          variables: params.variables || [],
+          tags: params.tags || [],
+        });
+        
+        return {
+          type: "object",
+          object: prompt,
+        };
+      }
+    );
+    
+    server.tool(
+      "get_prompt",
+      {
+        id: z.string(),
+      },
+      async (params) => {
+        try {
+          const prompt = await storageAdapter.getPrompt(params.id);
+          return {
+            type: "object",
+            object: prompt,
+          };
+        } catch (error) {
+          return {
+            type: "error",
+            error: `Prompt not found: ${params.id}`,
+          };
+        }
+      }
+    );
+    
+    server.tool(
+      "update_prompt",
+      {
+        id: z.string(),
+        name: z.string().optional(),
+        content: z.string().optional(),
+        description: z.string().optional(),
+        isTemplate: z.boolean().optional(),
+        variables: z.array(z.string()).optional(),
+        tags: z.array(z.string()).optional(),
+      },
+      async (params) => {
+        try {
+          const updatedPrompt = await storageAdapter.updatePrompt(params.id, {
+            name: params.name,
+            content: params.content,
+            description: params.description,
+            isTemplate: params.isTemplate,
+            variables: params.variables,
+            tags: params.tags,
+          });
+          
+          return {
+            type: "object",
+            object: updatedPrompt,
+          };
+        } catch (error) {
+          return {
+            type: "error",
+            error: `Error updating prompt: ${error.message}`,
+          };
+        }
+      }
+    );
+    
+    server.tool(
+      "list_prompts",
+      {
+        isTemplate: z.boolean().optional(),
+        tags: z.array(z.string()).optional(),
+        search: z.string().optional(),
+        limit: z.number().optional(),
+        offset: z.number().optional(),
+      },
+      async (params) => {
+        const prompts = await storageAdapter.listPrompts(params);
+        
+        return {
+          type: "object",
+          object: {
+            prompts,
+            total: prompts.length,
           },
-        },
+        };
+      }
+    );
+    
+    server.tool(
+      "delete_prompt",
+      {
+        id: z.string(),
+      },
+      async (params) => {
+        try {
+          await storageAdapter.deletePrompt(params.id);
+          return {
+            type: "object",
+            object: { success: true },
+          };
+        } catch (error) {
+          return {
+            type: "error",
+            error: `Error deleting prompt: ${error.message}`,
+          };
+        }
+      }
+    );
+    
+    server.tool(
+      "apply_template",
+      {
+        id: z.string(),
+        variables: z.record(z.string()),
+      },
+      async (params) => {
+        try {
+          const prompt = await storageAdapter.getPrompt(params.id);
+          
+          if (!prompt.isTemplate) {
+            return {
+              type: "error",
+              error: `Prompt is not a template: ${params.id}`,
+            };
+          }
+          
+          const content = applyTemplate(prompt.content, params.variables);
+          
+          return {
+            type: "object",
+            object: {
+              content,
+              originalPrompt: prompt,
+              appliedVariables: params.variables,
+            },
+          };
+        } catch (error) {
+          return {
+            type: "error",
+            error: `Error applying template: ${error.message}`,
+          };
+        }
       }
     );
     
