@@ -1,8 +1,6 @@
 # Base Docker Compose file for MCP Prompts
 # This file provides the foundational configuration
 
-version: '3.8'
-
 name: mcp-prompts
 
 services:
