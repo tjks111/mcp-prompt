@@ -591,6 +591,15 @@ export interface ServerConfig {
   /** HTTP server host */
   host: string;
   
+  /** Enable Server-Sent Events (SSE) */
+  enableSSE?: boolean;
+  
+  /** SSE endpoint path */
+  ssePath?: string;
+  
+  /** CORS origin setting */
+  corsOrigin?: string;
+  
   /** PostgreSQL configuration */
   postgres?: {
     host: string;
