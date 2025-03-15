@@ -1,0 +1,52 @@
+# Integration with multiple MCP servers
+
+services:
+  # MCP Prompts with File Storage
+  mcp-prompts-file:
+    image: sparesparrow/mcp-prompts:latest
+    container_name: mcp-prompts-file
+    environment:
+      - NODE_ENV=production
+      - STORAGE_TYPE=file
+      - PROMPTS_DIR=/app/data/prompts
+      - LOG_LEVEL=info
+      - HTTP_SERVER=true
+      - PORT=3005
+      - HOST=0.0.0.0
+    volumes:
+      - mcp-file-data:/app/data
+    ports:
+      - "3005:3005"
+    restart: unless-stopped
+    networks:
+      - mcp-network
+
+  # MCP Memory Server
+  mcp-memory:
+    image: node:20-alpine
+    container_name: mcp-memory
+    command: npx -y @modelcontextprotocol/server-memory
+    ports:
+      - "3010:3000"
+    networks:
+      - mcp-network
+
+  # MCP GitHub Server
+  mcp-github:
+    image: node:20-alpine
+    container_name: mcp-github
+    command: >
+      sh -c "
+        echo 'Installing MCP GitHub Server...' &&
+        npx -y @modelcontextprotocol/server-github
+      "
+    environment:
+      - GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_TOKEN:-}
+    ports:
+      - "3011:3000"
+    networks:
+      - mcp-network
+
+volumes:
+  mcp-file-data:
+    name: mcp-prompts-file-data

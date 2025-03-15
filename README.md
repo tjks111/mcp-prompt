@@ -28,13 +28,14 @@ This server provides a simple way to store, retrieve, and apply templates for AI
 - [Storage Adapters](#storage-adapters)
   - [PostgreSQL Setup](#postgresql-setup)
 - [Docker Deployment](#docker-deployment)
+  - [Purpose-Driven Container Architecture](#purpose-driven-container-architecture)
   - [Docker Compose Orchestration](#docker-compose-orchestration)
-    - [Simple Deployment](#simple-deployment)
-    - [PostgreSQL Deployment](#postgresql-deployment)
+    - [Base Deployment](#base-deployment)
     - [Development Environment](#development-environment)
+    - [PostgreSQL Integration](#postgresql-integration)
     - [Testing Environment](#testing-environment)
-    - [Docker Management Script](#docker-management-script)
-    - [Custom Configurations](#custom-configurations)
+    - [Multiple MCP Servers Integration](#multiple-mcp-servers-integration)
+    - [Building and Publishing Docker Images](#building-and-publishing-docker-images)
 - [Development](#development)
   - [Development Workflow](#development-workflow)
   - [Development Commands](#development-commands)
@@ -465,95 +466,83 @@ POSTGRES_CONNECTION_STRING=postgresql://user:password@host:port/database
 
 ## Docker Deployment
 
+### Purpose-Driven Container Architecture
+
+The MCP Prompts project uses a purpose-driven Docker architecture where each container has a specific role:
+
+1. **Core Infrastructure**
+   - PostgreSQL database for persistent storage
+   - MCP Prompts server for prompt management
+
+2. **Development Environment**
+   - Development server with hot reloading on port 3004
+   - Separate PostgreSQL instance on port 5442
+   - Node.js inspector on port 9229
+
+3. **Testing Infrastructure**
+   - Unit and integration test containers
+   - Isolated test PostgreSQL database
+
+4. **Integration Containers**
+   - Multiple MCP servers for integration testing:
+     - File-based server on port 3005
+     - Memory-based server on port 3010
+     - GitHub-based server on port 3011
+
+5. **AI-Enhanced PostgreSQL**
+   - PostgreSQL with AI capabilities
+
+For comprehensive Docker documentation, including advanced scenarios and environment-specific configurations, see the [Docker documentation](./docker/README.md).
+
 ### Docker Compose Orchestration
 
 The MCP Prompts Server offers various Docker Compose configurations for different deployment scenarios:
 
-#### Simple Deployment
+#### Base Deployment
 ```bash
 docker compose up -d
 ```
 This will deploy the MCP Prompts server using file storage on port 3003.
 
-#### PostgreSQL Deployment
-```bash
-docker compose -f docker-compose.postgres.yml up -d
-```
-This deploys:
-- A PostgreSQL database server
-- The MCP Prompts server configured for PostgreSQL
-- Adminer for database management at http://localhost:8080
-
 #### Development Environment
 ```bash
-docker compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.yml -f docker/docker-compose.dev.yml up -d
 ```
-This sets up a development environment with hot reloading. It mounts the source code from your local directory and includes Adminer.
+This sets up a development environment with hot reloading on port 3004. It uses a separate PostgreSQL database on port 5442 and enables the Node.js inspector on port 9229.
+
+#### PostgreSQL Integration
+```bash
+docker compose -f docker-compose.yml -f docker/docker-compose.postgres.yml up -d
+```
+This deploys the MCP Prompts server with PostgreSQL database support and includes Adminer for database management.
 
 #### Testing Environment
 ```bash
-docker compose -f docker-compose.test.yml up --build
+docker compose -f docker-compose.yml -f docker/docker-compose.test.yml up -d
 ```
 This creates a dedicated testing environment with:
-- A temporary PostgreSQL instance with test data
-- An isolated test runner container that executes all tests
-- Test results saved to the ./test-results directory
+- Unit test container
+- Integration test container
+- PostgreSQL database for testing
+- Health check container
 
-#### Docker Management Script
+#### Multiple MCP Servers Integration
+```bash
+docker compose -f docker-compose.yml -f docker/docker-compose.integration.yml up -d
+```
+This deploys multiple MCP servers to test their collaboration:
+- MCP Prompts server with file storage on port 3005
+- MCP Memory server on port 3010
+- MCP GitHub server on port 3011
 
-To simplify Docker Compose operations, use the provided management script:
+#### Building and Publishing Docker Images
+
+A convenience script is provided for building and publishing Docker images:
 
 ```bash
-# Start development environment
-./scripts/docker-manage.sh start dev
-
-# Run tests in Docker
-./scripts/docker-manage.sh test
-
-# View logs from production environment
-./scripts/docker-manage.sh logs prod
-
-# Clean up test environment
-./scripts/docker-manage.sh clean test
-
-# Show help
-./scripts/docker-manage.sh help
+./docker/scripts/build-and-publish.sh [tag]
 ```
-
-The management script supports the following commands:
-- `start`: Start Docker containers
-- `stop`: Stop Docker containers
-- `restart`: Restart Docker containers
-- `logs`: Show logs from containers
-- `clean`: Remove containers, networks, and volumes
-- `build`: Build Docker images
-- `test`: Run tests in Docker containers
-
-And the following environments:
-- `dev`: Development environment (default)
-- `test`: Testing environment
-- `prod`: Production environment
-
-#### Custom Configurations
-You can create your own custom Docker Compose configuration by extending the base configurations:
-
-```yaml
-# custom-compose.yml
-version: '3.8'
-
-include:
-  - docker-compose.yml
-
-services:
-  mcp-prompts:
-    environment:
-      - CUSTOM_ENV=value
-```
-
-Then run it with:
-```bash
-docker compose -f custom-compose.yml up -d
-```
+This builds both the main and test images and publishes them to Docker Hub.
 
 ## Development
 
