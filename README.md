@@ -548,165 +548,221 @@ This creates a dedicated testing environment with:
 
 #### Multiple MCP Servers Integration
 
-The MCP Prompts server is designed to work seamlessly with other MCP servers to create a powerful ecosystem for AI applications. Below are diagrams illustrating different integration patterns.
+The MCP Prompts server can be integrated with other MCP servers to create a powerful ecosystem for AI contextual processing. This section describes various integration patterns and scenarios.
 
-### Core Integration Architecture
+### Integration Architecture
+
+The following diagram illustrates how MCP Prompts integrates with multiple MCP servers in a typical deployment:
 
 ```mermaid
 graph TD
-    Client[Client Application]
+    Claude[Claude Desktop/AI Client] --> |Requests| MCP[MCP Prompts Server]
+    MCP --> |Prompt Templates| Claude
+    MCP --> |Storage| FS[Filesystem Storage]
+    MCP <--> |Resource Integration| GH[GitHub MCP]
+    MCP <--> |Resource Integration| FS2[Filesystem MCP]
+    MCP <--> |Resource Integration| MEM[Memory MCP]
+    MCP <--> |Resource Integration| SQL[SQL MCP]
     
-    subgraph "MCP Ecosystem"
-        Prompts[Prompts Server]
-        GitHub[GitHub Server]
-        Memory[Memory Server]
-        FileSystem[Filesystem Server]
-        Postgres[PostgreSQL Server]
-        Sequential[Sequential Thinking Server]
-        Puppeteer[Puppeteer Server]
-        
-        Prompts ---|Template Exchange| GitHub
-        Prompts ---|Context Storage| Memory
-        Prompts ---|File Access| FileSystem
-        Prompts ---|Database Storage| Postgres
-        Sequential ---|Complex Reasoning| Prompts
-        Puppeteer ---|Web Interaction| Prompts
+    subgraph "Storage Layer"
+        FS
+        PG
     end
     
-    Client -->|Template Requests| Prompts
-    Client -->|Repository Access| GitHub
-    Client -->|Context Retrieval| Memory
-    Client -->|File Operations| FileSystem
-    Client -->|Data Queries| Postgres
-    Client -->|Step-by-Step Analysis| Sequential
-    Client -->|Browser Automation| Puppeteer
+    subgraph "Integration Layer"
+        GH
+        FS2
+        MEM
+        SQL
+    end
     
-    style Prompts fill:#2ecc71,stroke:#27ae60,color:#fff
-    style GitHub fill:#3498db,stroke:#2980b9,color:#fff
-    style Memory fill:#9b59b6,stroke:#8e44ad,color:#fff
-    style FileSystem fill:#e74c3c,stroke:#c0392b,color:#fff
-    style Postgres fill:#f1c40f,stroke:#f39c12,color:#000
-    style Sequential fill:#1abc9c,stroke:#16a085,color:#fff
-    style Puppeteer fill:#34495e,stroke:#2c3e50,color:#fff
+    subgraph "Additional Services"
+        EL[ElevenLabs MCP] --> |TTS| Claude
+        ST[Sequential Thinking MCP] --> |Reasoning| Claude
+        WEB[Web Search MCP] --> |Search Results| Claude
+    end
+    
+    MCP <--> |Enhanced Capabilities| EL
+    MCP <--> |Enhanced Capabilities| ST
+    MCP <--> |Enhanced Capabilities| WEB
 ```
 
-### Data Flow for Template-Based Workflows
+### Data Flow between MCP Servers
+
+The following sequence diagram illustrates the typical data flow when multiple MCP servers are used together:
 
 ```mermaid
 sequenceDiagram
-    participant Client
-    participant Prompts as Prompts Server
-    participant GitHub as GitHub Server
-    participant Memory as Memory Server
-    participant FileSystem as Filesystem Server
+    participant Client as AI Client
+    participant Prompts as MCP Prompts
+    participant GitHub as GitHub MCP
+    participant FS as Filesystem MCP
+    participant DB as Database MCP
     
-    Client->>Prompts: Request Template (get_prompt)
-    Prompts-->>Client: Return Template Structure
+    Client->>Prompts: Request template
+    Prompts->>Client: Return template
     
-    Client->>GitHub: Fetch Repository Context
-    GitHub-->>Client: Return Repository Data
+    Client->>Prompts: Request with variables
+    Prompts->>GitHub: Get repository data
+    GitHub->>Prompts: Return repo data
+    Prompts->>FS: Get file content
+    FS->>Prompts: Return file content
+    Prompts->>DB: Query database
+    DB->>Prompts: Return query results
     
-    Client->>Prompts: Apply Template with Variables (apply_template)
-    Prompts-->>Client: Return Populated Template
-    
-    Client->>Memory: Store Session Context
-    Memory-->>Client: Context Stored Confirmation
-    
-    Client->>FileSystem: Save Generated Content
-    FileSystem-->>Client: File Operation Confirmation
-    
-    Note over Client,FileSystem: Complete Template-Based Workflow
+    Prompts->>Client: Completed prompt with context
 ```
 
-### Multi-Server Orchestration Pattern
+### Integration Patterns
 
-```mermaid
-graph TB
-    Client[Client Application]
-    
-    subgraph "Orchestration Layer"
-        Router[MCP Router]
-    end
-    
-    subgraph "Core Servers"
-        Prompts[Prompts Server]
-        Memory[Memory Server]
-        GitHub[GitHub Server]
-    end
-    
-    subgraph "Specialized Servers"
-        Sequential[Sequential Thinking]
-        FileSystem[Filesystem Server]
-        Postgres[PostgreSQL Server]
-        WebSearch[Web Search Server]
-        TimeSeries[Time Series Server]
-    end
-    
-    Client -->|All Requests| Router
-    
-    Router -->|Template Operations| Prompts
-    Router -->|Context Storage| Memory
-    Router -->|Repository Access| GitHub
-    Router -->|Complex Reasoning| Sequential
-    Router -->|File Operations| FileSystem
-    Router -->|Data Queries| Postgres
-    Router -->|Search Queries| WebSearch
-    Router -->|Time Data| TimeSeries
-    
-    Prompts -.->|Uses| Memory
-    Sequential -.->|Uses| Memory
-    Sequential -.->|Uses| Prompts
-    
-    style Router fill:#3498db,stroke:#2980b9,color:#fff,stroke-width:2px
-    style Prompts fill:#2ecc71,stroke:#27ae60,color:#fff
-    style Memory fill:#9b59b6,stroke:#8e44ad,color:#fff
-    style GitHub fill:#e74c3c,stroke:#c0392b,color:#fff
-    style Sequential fill:#1abc9c,stroke:#16a085,color:#fff
-    style FileSystem fill:#f39c12,stroke:#e67e22,color:#000
-    style Postgres fill:#34495e,stroke:#2c3e50,color:#fff
-    style WebSearch fill:#7f8c8d,stroke:#95a5a6,color:#fff
-    style TimeSeries fill:#d35400,stroke:#e67e22,color:#fff
-```
+There are several integration patterns that can be used with MCP Prompts:
 
-### Resources Integration Pattern
+1. **Resource Enrichment**: MCP Prompts templates reference resources from other MCP servers
 
 ```mermaid
 graph LR
-    Client[Client Application]
+    Prompt[Prompt Template] -->|References| GH[GitHub Resources]
+    Prompt -->|References| FS[Filesystem Resources]
+    Prompt -->|References| DB[Database Resources]
     
-    subgraph "MCP Prompts Server"
-        PromptManager[Prompt Manager]
-        ResourceAdapter[Resource Adapter]
-        TemplateProcessor[Template Processor]
+    subgraph "MCP Prompts"
+        Prompt
     end
     
-    subgraph "External MCP Servers"
-        GitHub[GitHub Server]
-        FileSystem[Filesystem Server]
-        Postgres[PostgreSQL Server]
-        Memory[Memory Server]
+    subgraph "Other MCP Servers"
+        GH
+        FS
+        DB
+    end
+```
+
+2. **Chained Processing**: Output from one MCP server becomes input to another
+
+```mermaid
+graph LR
+    Client -->|1. Request| GH[GitHub MCP]
+    GH -->|2. Repo data| Prompts[MCP Prompts]
+    Prompts -->|3. Formatted prompt| ST[Sequential Thinking MCP]
+    ST -->|4. Analysis| Client
+```
+
+3. **Hub and Spoke**: MCP Prompts acts as a central hub for orchestrating multiple MCP servers
+
+```mermaid
+graph TD
+    Client --> Prompts
+    
+    Prompts -->|Resource requests| GH
+    Prompts -->|Resource requests| FS
+    Prompts -->|Resource requests| DB
+    Prompts -->|Resource requests| Web
+    
+    GH --> Prompts
+    FS --> Prompts
+    DB --> Prompts
+    Web --> Prompts
+    
+    Prompts --> Client
+    
+    subgraph "Hub"
+        Prompts[MCP Prompts]
     end
     
-    Client -->|1. Request Template| PromptManager
-    PromptManager -->|2. Fetch Template| TemplateProcessor
-    
-    Client -->|3. Request Resources| ResourceAdapter
-    ResourceAdapter -->|4a. Fetch Files| FileSystem
-    ResourceAdapter -->|4b. Query Repository| GitHub
-    ResourceAdapter -->|4c. Query Database| Postgres
-    ResourceAdapter -->|4d. Retrieve Context| Memory
-    
-    FileSystem -->|5a. File Content| ResourceAdapter
-    GitHub -->|5b. Repository Data| ResourceAdapter
-    Postgres -->|5c. Query Results| ResourceAdapter
-    Memory -->|5d. Context Data| ResourceAdapter
-    
-    ResourceAdapter -->|6. Resource Data| TemplateProcessor
-    TemplateProcessor -->|7. Populated Template| Client
-    
-    style PromptManager fill:#2ecc71,stroke:#27ae60,color:#fff
-    style ResourceAdapter fill:#3498db,stroke:#2980b9,color:#fff
-    style TemplateProcessor fill:#9b59b6,stroke:#8e44ad,color:#fff
+    subgraph "Spokes"
+        GH[GitHub MCP]
+        FS[Filesystem MCP]
+        DB[Database MCP]
+        Web[Web Search MCP]
+    end
+```
+
+### Configuration Example
+
+Here's an example of how to configure multiple MCP servers in the Claude Desktop configuration:
+
+```json
+{
+  "mcpServers": {
+    "prompts": {
+      "command": "npx",
+      "args": ["-y", "@sparesparrow/mcp-prompts"],
+      "env": {
+        "STORAGE_TYPE": "file",
+        "PROMPTS_DIR": "/path/to/prompts"
+      }
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "your-token-here"
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/files"]
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
+    }
+  }
+}
+```
+
+### Docker Compose Integration
+
+For more complex integration scenarios, Docker Compose can be used to orchestrate multiple MCP servers:
+
+```yaml
+version: '3'
+services:
+  mcp-prompts:
+    image: sparesparrow/mcp-prompts:latest
+    environment:
+      - STORAGE_TYPE=file
+      - PROMPTS_DIR=/app/data/prompts
+    volumes:
+      - prompts-data:/app/data
+    ports:
+      - "3003:3003"
+      
+  mcp-github:
+    image: node:alpine
+    command: npx -y @modelcontextprotocol/server-github
+    environment:
+      - GITHUB_PERSONAL_ACCESS_TOKEN=your-token-here
+    ports:
+      - "3004:3000"
+      
+  mcp-filesystem:
+    image: node:alpine
+    command: npx -y @modelcontextprotocol/server-filesystem /data
+    volumes:
+      - ./data:/data
+    ports:
+      - "3005:3000"
+      
+  mcp-postgres:
+    image: node:alpine
+    command: npx -y @modelcontextprotocol/server-postgres postgresql://postgres:postgres@db/mcp
+    depends_on:
+      - db
+    ports:
+      - "3006:3000"
+      
+  db:
+    image: postgres:14-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=mcp
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      
+volumes:
+  prompts-data:
+  postgres-data:
 ```
 
 ## Development
@@ -1002,7 +1058,7 @@ graph TD
 
 ```mermaid
 graph LR
-    Claude[Claude AI Assistant] -->|Requests| MCP[MCP Prompts Server]
+    Claude[Claude Desktop/AI Client] --> |Requests| MCP[MCP Prompts Server]
     
     subgraph MCP Ecosystem
         MCP -->|Resource Lists| FileServer[MCP Filesystem Server]
@@ -1654,9 +1710,7 @@ services:
       - POSTGRES_DB=mcp_prompts
     volumes:
       - pg_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    
+      
   postgres-server:
     image: mcp/postgres-server:latest
     environment:

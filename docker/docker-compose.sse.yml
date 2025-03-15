@@ -33,3 +33,8 @@ services:
 volumes:
   mcp-sse-data:
     name: mcp-prompts-sse-data 
+
+networks:
+  mcp-network:
+    name: mcp-network
+    driver: bridge 

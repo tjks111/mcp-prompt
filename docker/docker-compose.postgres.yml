@@ -76,3 +76,8 @@ volumes:
   mcp-postgres-data:
     name: mcp-prompts-postgres-data
 
+networks:
+  mcp-network:
+    name: mcp-network
+    driver: bridge
+

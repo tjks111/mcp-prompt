@@ -28,6 +28,8 @@ This directory contains a collection of prompt templates that can be used with t
 - **Repository Explorer** (`repository-explorer.json`): Template for exploring and analyzing code repositories
 - **Database Query Assistant** (`database-query-assistant.json`): Helper for constructing and optimizing database queries
 - **Multi-Resource Context** (`multi-resource-context.json`): Template for working with multiple resources in a unified context
+- **MCP Server Integration Guide** (`mcp-server-integration-template.json`): A detailed template for planning, configuring, and integrating multiple MCP servers into a cohesive ecosystem
+- **Advanced Multi-Server Integration Template** (`advanced-multi-server-template.json`): A comprehensive template that coordinates multiple MCP servers for complex tasks requiring diverse capabilities
 
 ## Using MCP Integration Prompts
 

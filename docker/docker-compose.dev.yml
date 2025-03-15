@@ -56,3 +56,8 @@ volumes:
   mcp-dev-data:
   postgres_dev_data:
 
+networks:
+  mcp-network:
+    name: mcp-network
+    driver: bridge
+
