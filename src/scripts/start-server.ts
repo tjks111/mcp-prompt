@@ -15,6 +15,9 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { spawn } from 'child_process';
+import { createServer } from '../index.js';
+import { StorageConfig } from '../interfaces.js';
+import { startHttpServer } from '../http-server.js';
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -68,21 +71,45 @@ console.log(`SSE_PATH=${process.env.SSE_PATH}`);
 console.log(`HOST=${process.env.HOST || '0.0.0.0'}`);
 console.log();
 
-// Start the server using Node.js from the dist directory
-const serverProcess = spawn('node', ['dist/index.js'], {
-  stdio: 'inherit',
-  env: process.env
-});
+const DEFAULT_CONFIG: StorageConfig = {
+  type: process.env.STORAGE_TYPE as 'file' | 'memory' | 'postgres' || 'memory',
+  promptsDir: process.env.PROMPTS_DIR,
+  backupsDir: process.env.BACKUPS_DIR,
+  pgHost: process.env.PG_HOST,
+  pgPort: process.env.PG_PORT ? parseInt(process.env.PG_PORT, 10) : undefined,
+  pgUser: process.env.PG_USER,
+  pgPassword: process.env.PG_PASSWORD,
+  pgDatabase: process.env.PG_DATABASE
+};
 
-// Handle server exit
-serverProcess.on('exit', (code) => {
-  console.log(`Server exited with code ${code}`);
-});
+async function main() {
+  try {
+    // Create and initialize the MCP server
+    const server = await createServer(DEFAULT_CONFIG);
 
-// Handle process exit
-process.on('SIGINT', () => {
-  console.log('Shutting down...');
-  serverProcess.kill();
-});
+    // Start HTTP server if enabled
+    if (process.env.HTTP_SERVER === 'true') {
+      const port = parseInt(process.env.PORT || '3000', 10);
+      const host = process.env.HOST || 'localhost';
+      
+      await startHttpServer(server, {
+        port,
+        host,
+        corsOrigin: process.env.CORS_ORIGIN,
+        enableSSE: process.env.ENABLE_SSE === 'true',
+        ssePath: process.env.SSE_PATH
+      });
+      
+      console.log(`HTTP server listening at http://${host}:${port}`);
+    }
 
-console.log('MCP Prompts server started. Press Ctrl+C to exit.'); 
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+main().catch(error => {
+  console.error('Unhandled error:', error);
+  process.exit(1);
+}); 

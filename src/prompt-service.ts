@@ -3,112 +3,106 @@
  * Centralizes management of all prompt-related operations
  */
 
-import type { Prompt, StorageAdapter, ListPromptsOptions } from './interfaces.js';
+import type { StorageAdapter } from './interfaces.js';
+import { Prompt } from './interfaces.js';
+import { CreatePromptArgs, UpdatePromptArgs, ListPromptsArgs, defaultPrompts } from './prompts.js';
 
 export class PromptService {
-  private storageAdapter: StorageAdapter;
+  private storage: StorageAdapter;
 
-  constructor(storageAdapter: StorageAdapter) {
-    this.storageAdapter = storageAdapter;
+  constructor(storage: StorageAdapter) {
+    this.storage = storage;
   }
 
-  /**
-   * Get a prompt by ID
-   * @param id Prompt ID
-   * @returns The prompt
-   */
-  async getPrompt(id: string): Promise<Prompt> {
-    return this.storageAdapter.getPrompt(id);
-  }
-
-  /**
-   * Save a new prompt
-   * @param prompt Prompt data without ID and metadata
-   * @returns The saved prompt with ID
-   */
-  async savePrompt(prompt: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt' | 'version'>): Promise<Prompt> {
-    const result = await this.storageAdapter.savePrompt(prompt);
-    if (typeof result === 'string') {
-      throw new Error(`Failed to save prompt: ${result}`);
-    }
-    return result;
-  }
-
-  /**
-   * Update an existing prompt
-   * @param id Prompt ID
-   * @param updates Partial prompt data to update
-   * @returns The updated prompt
-   */
-  async updatePrompt(id: string, updates: Partial<Prompt>): Promise<Prompt> {
-    if (!this.storageAdapter.updatePrompt) {
-      throw new Error('Storage adapter does not support updating prompts');
-    }
-    const result = await this.storageAdapter.updatePrompt(id, updates);
-    if (result === undefined || result === null) {
-      throw new Error(`Failed to update prompt: ${id}`);
-    }
-    return result;
-  }
-
-  /**
-   * Delete a prompt by ID
-   * @param id Prompt ID
-   */
-  async deletePrompt(id: string): Promise<void> {
-    return this.storageAdapter.deletePrompt(id);
-  }
-
-  /**
-   * List prompts with optional filtering
-   * @param options Filter options
-   * @returns Array of prompts
-   */
-  async listPrompts(options?: ListPromptsOptions): Promise<Prompt[]> {
-    return this.storageAdapter.listPrompts(options);
-  }
-
-  /**
-   * Apply variables to a template prompt
-   * @param templateId Template prompt ID
-   * @param variables Variables to apply
-   * @returns Processed content and metadata
-   */
-  async applyTemplate(templateId: string, variables: Record<string, string>): Promise<{
-    content: string;
-    originalPrompt: Prompt;
-    appliedVariables: Record<string, string>;
-  }> {
-    const prompt = await this.getPrompt(templateId);
+  async initialize() {
+    await this.storage.connect();
     
-    if (!prompt.isTemplate) {
-      throw new Error(`Prompt is not a template: ${templateId}`);
+    // Load default prompts if storage is empty
+    const existingPrompts = await this.listPrompts({});
+    if (existingPrompts.length === 0) {
+      await Promise.all(
+        Object.values(defaultPrompts).map(prompt => 
+          this.createPrompt(prompt as CreatePromptArgs)
+        )
+      );
     }
-    
-    const content = this.processTemplate(prompt.content, variables);
-    
-    return {
-      content,
-      originalPrompt: prompt,
-      appliedVariables: variables,
+  }
+
+  async createPrompt(args: CreatePromptArgs): Promise<Prompt> {
+    const prompt: Prompt = {
+      id: args.name.toLowerCase().replace(/\s+/g, '-'),
+      ...args,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      version: 1
     };
+
+    return this.storage.savePrompt(prompt);
   }
 
-  /**
-   * Process a template string by replacing variables
-   * @param template Template string
-   * @param variables Variables to replace
-   * @returns Processed string
-   */
-  private processTemplate(template: string, variables: Record<string, string>): string {
-    let result = template;
-    
-    for (const [key, value] of Object.entries(variables)) {
-      const regex = new RegExp(`{${key}}`, 'g');
-      result = result.replace(regex, value);
+  async updatePrompt(id: string, args: Partial<UpdatePromptArgs>): Promise<Prompt> {
+    const existing = await this.storage.getPrompt(id);
+    if (!existing) {
+      throw new Error(`Prompt not found: ${id}`);
     }
+
+    const updated: Prompt = {
+      ...existing,
+      ...args,
+      id, // Preserve original ID
+      updatedAt: new Date().toISOString(),
+      version: (existing.version || 1) + 1
+    };
+
+    return this.storage.updatePrompt(id, updated);
+  }
+
+  async deletePrompt(id: string): Promise<void> {
+    return this.storage.deletePrompt(id);
+  }
+
+  async getPrompt(id: string): Promise<Prompt | null> {
+    return this.storage.getPrompt(id);
+  }
+
+  async listPrompts(args: ListPromptsArgs): Promise<Prompt[]> {
+    const prompts = await this.storage.listPrompts();
     
-    return result;
+    return prompts.filter(prompt => {
+      if (args.category && prompt.category !== args.category) {
+        return false;
+      }
+      if (args.tag && !prompt.tags?.includes(args.tag)) {
+        return false;
+      }
+      if (args.isTemplate !== undefined && prompt.isTemplate !== args.isTemplate) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  async applyTemplate(id: string, variables: Record<string, string>): Promise<string> {
+    const prompt = await this.getPrompt(id);
+    if (!prompt) {
+      throw new Error(`Template prompt not found: ${id}`);
+    }
+    if (!prompt.isTemplate) {
+      throw new Error(`Prompt is not a template: ${id}`);
+    }
+
+    let content = prompt.content;
+    for (const [key, value] of Object.entries(variables)) {
+      content = content.replace(new RegExp(`{{${key}}}`, 'g'), value);
+    }
+
+    // Check for any remaining template variables
+    const remaining = content.match(/{{[^}]+}}/g);
+    if (remaining) {
+      throw new Error(`Missing template variables: ${remaining.join(', ')}`);
+    }
+
+    return content;
   }
 
   /**
@@ -188,5 +182,22 @@ export class PromptService {
         };
       })
     };
+  }
+
+  /**
+   * Process a template string by replacing variables
+   * @param template Template string
+   * @param variables Variables to replace
+   * @returns Processed string
+   */
+  private processTemplate(template: string, variables: Record<string, string>): string {
+    let result = template;
+    
+    for (const [key, value] of Object.entries(variables)) {
+      const regex = new RegExp(`{${key}}`, 'g');
+      result = result.replace(regex, value);
+    }
+    
+    return result;
   }
 } 

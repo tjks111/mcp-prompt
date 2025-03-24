@@ -314,14 +314,14 @@ export interface StorageAdapter {
    * @param prompt Prompt to save
    * @returns Prompt ID or the full prompt
    */
-  savePrompt(prompt: Partial<Prompt>): Promise<string | Prompt>;
+  savePrompt(prompt: Prompt): Promise<Prompt>;
   
   /**
    * Get a prompt by ID
    * @param id Prompt ID
    * @returns Prompt
    */
-  getPrompt(id: string): Promise<Prompt>;
+  getPrompt(id: string): Promise<Prompt | null>;
   
   /**
    * Get all prompts
@@ -335,7 +335,7 @@ export interface StorageAdapter {
    * @param data Updated prompt data
    * @returns Updated prompt or void
    */
-  updatePrompt?(id: string, data: Partial<Prompt>): Promise<Prompt | void>;
+  updatePrompt(id: string, prompt: Prompt): Promise<Prompt>;
   
   /**
    * List prompts with filtering options
@@ -627,4 +627,15 @@ export interface ErrorWithContext extends Error {
   
   /** Original error if this wraps another error */
   originalError?: Error;
+}
+
+export interface StorageConfig {
+  type: 'file' | 'memory' | 'postgres';
+  promptsDir?: string;  // For file storage
+  backupsDir?: string;  // For file storage
+  pgHost?: string;      // For postgres storage
+  pgPort?: number;      // For postgres storage
+  pgUser?: string;      // For postgres storage
+  pgPassword?: string;  // For postgres storage
+  pgDatabase?: string;  // For postgres storage
 } 

@@ -12,8 +12,9 @@ import EventEmitter from 'node:events';
 import {
   ServerConfig,
 } from './interfaces.js';
-import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { SSEServerTransport} from '@modelcontextprotocol/sdk/server/sse.js';
+import  type { Server as MCPServer } from '@modelcontextprotocol/sdk/server/index.js';
+import { Express } from 'express';
 
 // Define the interfaces that were previously imported
 interface SseClient {
@@ -394,7 +395,7 @@ export function getSseManager(options?: SseManagerOptions): SseManager {
 export function enableSseInHttpServer(
   config: ServerConfig,
   httpServer: HttpServer,
-  mcpServer?: Server
+  mcpServer?: MCPServer
 ): SseManager {
   // Create or get the SSE manager
   const manager = getSseManager();
@@ -430,6 +431,30 @@ export function enableSseInHttpServer(
   }
   
   return manager;
+}
+
+export function setupSSE(app: Express, path: string) {
+  app.get(path, (req, res) => {
+    // Set SSE headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive'
+    });
+
+    // Send initial connection message
+    res.write('event: connected\ndata: {}\n\n');
+
+    // Keep connection alive
+    const keepAlive = setInterval(() => {
+      res.write(': keepalive\n\n');
+    }, 30000);
+
+    // Clean up on client disconnect
+    req.on('close', () => {
+      clearInterval(keepAlive);
+    });
+  });
 } 
 
 
