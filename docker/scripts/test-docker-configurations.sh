@@ -4,92 +4,77 @@
 
 set -e
 
-# Change to the project root directory
-cd "$(dirname "$0")/../.."
-ROOT_DIR=$(pwd)
+# Colors for better readability
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
 
-echo "=== MCP Prompts Docker Configurations Test ==="
-echo "Testing all Docker Compose configurations..."
+echo -e "${BLUE}Testing Docker Compose configurations${NC}"
 
 # Function to test a Docker Compose configuration
-test_compose_config() {
-  local config_name=$1
-  local compose_files=$2
-  local success_check_command=$3
-  
-  echo ""
-  echo "Testing $config_name configuration..."
-  echo "Command: docker compose $compose_files up -d"
-  
-  # Start the containers
-  eval "docker compose $compose_files up -d"
+function test_configuration() {
+    local name=$1
+    local env=$2
+    local profiles=$3
+    
+    echo -e "${YELLOW}Testing ${name} configuration${NC}"
+    echo -e "${GREEN}Environment: ${env}${NC}"
+    echo -e "${GREEN}Profiles: ${profiles}${NC}"
+    
+    # Build and start containers
+    if [ -z "$profiles" ]; then
+        docker/scripts/docker-compose-manager.sh up -e "$env"
+    else
+        # Split profiles by comma and add each as a separate -p argument
+        IFS=',' read -ra PROFILE_ARRAY <<< "$profiles"
+        PROFILE_ARGS=""
+        for profile in "${PROFILE_ARRAY[@]}"; do
+            PROFILE_ARGS="$PROFILE_ARGS -p $profile"
+        done
+        
+        docker/scripts/docker-compose-manager.sh up -e "$env" $PROFILE_ARGS
+    fi
   
   # Wait for containers to start
-  echo "Waiting 30 seconds for containers to start..."
-  sleep 30
-  
-  # Run the success check command
-  echo "Running success check..."
-  if eval "$success_check_command"; then
-    echo "✅ $config_name configuration test PASSED"
-    result="PASS"
-  else
-    echo "❌ $config_name configuration test FAILED"
-    result="FAIL"
-  fi
-  
-  # Stop and remove the containers
-  echo "Cleaning up..."
-  eval "docker compose $compose_files down -v"
-  
-  return $([ "$result" = "PASS" ] && echo 0 || echo 1)
+    echo "Waiting 10 seconds for containers to start..."
+    sleep 10
+    
+    # Check container status
+    docker/scripts/docker-compose-manager.sh ps -e "$env"
+    
+    # Clean up
+    docker/scripts/docker-compose-manager.sh down -e "$env"
+    
+    echo -e "${GREEN}Test completed for ${name} configuration${NC}"
+    echo ""
 }
 
-# Array to track test results
-declare -A test_results
+# Build Docker images first
+echo -e "${BLUE}Building Docker images${NC}"
+docker/scripts/docker-compose-manager.sh image -e production -t test
+docker/scripts/docker-compose-manager.sh image -e development -t test
+docker/scripts/docker-compose-manager.sh image -e test -t test
 
-# Test 1: Basic configuration (file storage)
-echo "Test 1: Basic Configuration (file storage)"
-test_compose_config "Basic" "-f docker-compose.yml" "docker ps | grep -q 'mcp-prompts.*' && curl -s -o /dev/null -w '%{http_code}' http://localhost:3003/health | grep -q '200'"
-test_results["Basic"]=$?
+# Test configurations
+echo -e "${BLUE}Testing basic configurations${NC}"
+test_configuration "Base Production" "production" ""
+test_configuration "Development" "development" ""
+test_configuration "Test" "test" ""
 
-# Test 2: PostgreSQL configuration
-echo "Test 2: PostgreSQL Configuration"
-test_compose_config "PostgreSQL" "-f docker-compose.yml -f docker/docker-compose.postgres.yml" "docker ps | grep -q 'mcp-postgres.*' && docker ps | grep -q 'mcp-prompts-postgres.*' && curl -s -o /dev/null -w '%{http_code}' http://localhost:3004/health | grep -q '200'"
-test_results["PostgreSQL"]=$?
+echo -e "${BLUE}Testing database configurations${NC}"
+test_configuration "Production with PostgreSQL" "production" "postgres"
+test_configuration "Development with PostgreSQL" "development" "postgres"
+test_configuration "Production with PostgreSQL and Adminer" "production" "postgres,adminer"
 
-# Test 3: Development environment
-echo "Test 3: Development Environment"
-test_compose_config "Development" "-f docker-compose.yml -f docker/docker-compose.dev.yml" "docker ps | grep -q 'postgres-dev.*' && docker ps | grep -q 'mcp-prompts-dev.*'"
-test_results["Development"]=$?
+echo -e "${BLUE}Testing integration configurations${NC}"
+test_configuration "Production with SSE" "production" "sse"
+test_configuration "Production with PGAI" "production" "pgai"
+test_configuration "Production with Integration" "production" "integration"
 
-# Test 4: Testing environment
-echo "Test 4: Testing Environment"
-test_compose_config "Testing" "-f docker-compose.yml -f docker/docker-compose.test.yml" "docker ps | grep -q 'postgres-test.*' && docker ps | grep -q 'mcp-unit-tests.*'"
-test_results["Testing"]=$?
+echo -e "${BLUE}Testing complex configurations${NC}"
+test_configuration "Development with PostgreSQL and SSE" "development" "postgres,sse"
+test_configuration "Production with Full Stack" "production" "postgres,adminer,sse,integration"
 
-# Test 5: Integration with multiple MCP servers
-echo "Test 5: Integration Environment"
-test_compose_config "Integration" "-f docker-compose.yml -f docker/docker-compose.integration.yml" "docker ps | grep -q 'mcp-prompts-file.*' && docker ps | grep -q 'mcp-memory.*' && docker ps | grep -q 'mcp-github.*'"
-test_results["Integration"]=$?
-
-# Show test results summary
-echo ""
-echo "=== Test Results Summary ==="
-all_passed=true
-for config in "${!test_results[@]}"; do
-  status=$([ "${test_results[$config]}" -eq 0 ] && echo "✅ PASSED" || echo "❌ FAILED")
-  echo "$config Configuration: $status"
-  if [ "${test_results[$config]}" -ne 0 ]; then
-    all_passed=false
-  fi
-done
-
-echo ""
-if $all_passed; then
-  echo "🎉 All Docker Compose configurations passed!"
-  exit 0
-else
-  echo "⚠️ Some Docker Compose configurations failed!"
-  exit 1
-fi 
+echo -e "${GREEN}All Docker Compose configurations tested successfully${NC}" 

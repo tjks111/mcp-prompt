@@ -1,7 +1,7 @@
 {
   "name": "MCP Prompts Server",
   "build": {
-    "dockerfile": "../Dockerfile",
+    "dockerfile": "../docker/Dockerfile",
     "context": ".."
   },
   "customizations": {

@@ -1,6 +1,7 @@
 ---
 description: Guidelines for developing a streamlined prompt manager using MCP architecture patterns
 globs:
+  - "src/*.ts"
   - "src/**/*.ts"
   - "src/**/*.js"
   - "src/**/*.json"
@@ -25,27 +26,12 @@ Follow these principles for a streamlined codebase:
 - Maintain a flat, consistent file structure
 - Limit the number of dependencies
 
-### 2. Layered Architecture
-
-Organize the codebase into clear layers:
-
-```
-src/
-  ├── core/              # Core domain models and business logic
-  ├── adapters/          # Integrations with MCP servers
-  ├── services/          # Business services orchestrating functionality
-  ├── tools/             # MCP Tool implementations
-  ├── resources/         # MCP Resource implementations
-  ├── utils/             # Shared utilities
-  └── index.ts           # Main entry point
-```
-
-### 3. Unified Type System
+### 2. Unified Type System
 
 Maintain a single source of truth for type definitions:
 
 ```typescript
-// src/core/types.ts - Single location for all type definitions
+// src/interfaces.ts - Single location for all type definitions
 export interface Prompt {
   id: string;
   name: string;
@@ -86,12 +72,12 @@ export interface ApplyTemplateResult {
 // Additional types as needed...
 ```
 
-### 4. Adapter Pattern for MCP Integration
+### 3. Adapter Pattern for MCP Integration
 
 Use a consistent adapter approach for all MCP server integrations:
 
 ```typescript
-// src/adapters/base-adapter.ts
+// src/adapters.ts
 export interface MCPAdapter<T> {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
@@ -99,7 +85,6 @@ export interface MCPAdapter<T> {
   // Type-specific methods defined in derived interfaces
 }
 
-// src/adapters/storage-adapter.ts
 export interface StorageAdapter extends MCPAdapter<Prompt> {
   getPrompt(id: string): Promise<Prompt>;
   savePrompt(prompt: Prompt): Promise<void>;
@@ -120,7 +105,7 @@ export class FilesystemAdapter implements StorageAdapter {
 Implement MCP tools following this pattern:
 
 ```typescript
-// src/tools/prompt-tools.ts
+// src/index.ts
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { z } from "zod";
 
@@ -195,7 +180,7 @@ export function setupPromptTools(server: Server, promptService: PromptService) {
 Implement MCP resources following this pattern:
 
 ```typescript
-// src/resources/prompt-resources.ts
+// src/resources.ts
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/resources.js";
 
@@ -241,7 +226,7 @@ export function setupPromptResources(server: Server, promptService: PromptServic
 Keep utility functions focused and minimal:
 
 ```typescript
-// src/utils/template-utils.ts
+// src/index.ts
 import { Prompt, TemplateVariables, ApplyTemplateResult } from "../core/types";
 
 export function applyTemplate(prompt: Prompt, variables: TemplateVariables): ApplyTemplateResult {
@@ -384,7 +369,7 @@ services:
 Implement a focused testing strategy:
 
 ```typescript
-// src/tests/prompt-service.test.ts
+// tests/prompt-service.test.ts
 import { PromptService } from '../services/prompt-service';
 import { MockStorageAdapter } from './mocks/mock-storage-adapter';
 

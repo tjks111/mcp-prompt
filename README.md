@@ -67,6 +67,16 @@ This server provides a simple way to store, retrieve, and apply templates for AI
   - [Configuring Claude Desktop to Use SSE](#configuring-claude-desktop-to-use-sse)
   - [SSE API](#sse-api)
 
+## Implementation Updates
+
+The MCP Prompts Server has been refactored to use the new registration methods from MCP SDK version 1.6.1:
+
+- **server.resource** for defining resource endpoints (e.g., for prompts and templates).
+- **server.tool** for registering tool operations (e.g., add, get, update, list, delete, and apply_template).
+- **server.prompt** for prompt-specific operations (e.g., "review-code").
+
+These changes simplify the codebase, improve maintainability, and ensure better compatibility with the latest MCP SDK.
+
 ## Features
 
 - Store and retrieve prompts
@@ -486,283 +496,255 @@ POSTGRES_CONNECTION_STRING=postgresql://user:password@host:port/database
 
 ## Docker Deployment
 
+The MCP Prompts server can be deployed using Docker in various configurations, depending on your needs.
+
+### Using the Docker Compose Manager
+
+We provide a convenient script for managing Docker Compose configurations, making it easy to launch the server with different profiles and environments:
+
+```bash
+# Start MCP Prompts with file storage
+./docker/scripts/docker-compose-manager.sh up
+
+# Start with PostgreSQL database
+./docker/scripts/docker-compose-manager.sh up -p postgres
+
+# Start development environment with PostgreSQL
+./docker/scripts/docker-compose-manager.sh up -e development -p postgres
+
+# Start with SSE support (for Server-Sent Events)
+./docker/scripts/docker-compose-manager.sh up -p sse
+
+# Start with multiple MCP servers integration
+./docker/scripts/docker-compose-manager.sh up -p integration
+```
+
 ### Purpose-Driven Container Architecture
 
-The MCP Prompts project uses a purpose-driven Docker architecture where each container has a specific role:
+Our Docker architecture is designed around specific use cases:
 
-1. **Core Infrastructure**
-   - PostgreSQL database for persistent storage
-   - MCP Prompts server for prompt management
+1. **Production Environment**: Optimized for performance and security
+2. **Development Environment**: Includes hot-reloading and debugging tools
+3. **Test Environment**: For running automated tests
+4. **PostgreSQL Integration**: Adds PostgreSQL storage backend
+5. **Multiple MCP Servers Integration**: Connects with other MCP servers
 
-2. **Development Environment**
-   - Development server with hot reloading on port 3004
-   - Separate PostgreSQL instance on port 5442
-   - Node.js inspector on port 9229
+### Available Docker Images
 
-3. **Testing Infrastructure**
-   - Unit and integration test containers
-   - Isolated test PostgreSQL database
+The official MCP Prompts Docker images are available on Docker Hub:
 
-4. **Integration Containers**
-   - Multiple MCP servers for integration testing:
-     - File-based server on port 3005
-     - Memory-based server on port 3010
-     - GitHub-based server on port 3011
+- **Production**: `sparesparrow/mcp-prompts:latest`
+- **Development**: `sparesparrow/mcp-prompts:dev`
+- **Test**: `sparesparrow/mcp-prompts:test`
 
-5. **AI-Enhanced PostgreSQL**
-   - PostgreSQL with AI capabilities
+### Docker Compose Configurations
 
-For comprehensive Docker documentation, including advanced scenarios and environment-specific configurations, see the [Docker documentation](./docker/README.md).
-
-### Docker Compose Orchestration
-
-The MCP Prompts Server offers various Docker Compose configurations for different deployment scenarios:
+We offer several Docker Compose configurations that can be combined:
 
 #### Base Deployment
+
 ```bash
-docker compose up -d
+docker compose -f docker/compose/docker-compose.base.yml up -d
 ```
-This will deploy the MCP Prompts server using file storage on port 3003.
+
+This provides a basic MCP Prompts server with file-based storage.
 
 #### Development Environment
+
 ```bash
-docker compose -f docker-compose.yml -f docker/docker-compose.dev.yml up -d
+docker compose -f docker/compose/docker-compose.base.yml -f docker/compose/docker-compose.development.yml up -d
 ```
-This sets up a development environment with hot reloading on port 3004. It uses a separate PostgreSQL database on port 5442 and enables the Node.js inspector on port 9229.
+
+Includes hot-reloading, source code mounting, and Node.js inspector for debugging.
 
 #### PostgreSQL Integration
+
 ```bash
-docker compose -f docker-compose.yml -f docker/docker-compose.postgres.yml up -d
+docker compose -f docker/compose/docker-compose.base.yml -f docker/compose/docker-compose.postgres.yml up -d
 ```
-This deploys the MCP Prompts server with PostgreSQL database support and includes Adminer for database management.
+
+Adds PostgreSQL database and Adminer for database management.
 
 #### Testing Environment
+
 ```bash
-docker compose -f docker-compose.yml -f docker/docker-compose.test.yml up -d
+docker compose -f docker/compose/docker-compose.base.yml -f docker/compose/docker-compose.test.yml up -d
 ```
-This creates a dedicated testing environment with:
-- Unit test container
-- Integration test container
-- PostgreSQL database for testing
-- Health check container
+
+Sets up a environment optimized for running tests.
 
 #### Multiple MCP Servers Integration
 
-The MCP Prompts server can be integrated with other MCP servers to create a powerful ecosystem for AI contextual processing. This section describes various integration patterns and scenarios.
-
-### Integration Architecture
-
-The following diagram illustrates how MCP Prompts integrates with multiple MCP servers in a typical deployment:
+The MCP Prompts Server is designed to integrate seamlessly with other MCP servers in the ecosystem, providing a comprehensive solution for AI contextual needs. This integration enables advanced capabilities through the combined power of specialized servers.
 
 ```mermaid
 graph TD
-    Claude[Claude Desktop/AI Client] --> |Requests| MCP[MCP Prompts Server]
-    MCP --> |Prompt Templates| Claude
-    MCP --> |Storage| FS[Filesystem Storage]
-    MCP <--> |Resource Integration| GH[GitHub MCP]
-    MCP <--> |Resource Integration| FS2[Filesystem MCP]
-    MCP <--> |Resource Integration| MEM[Memory MCP]
-    MCP <--> |Resource Integration| SQL[SQL MCP]
+    classDef mainServer fill:#f96,stroke:#333,stroke-width:2px;
+    classDef serverNode fill:#9cf,stroke:#333,stroke-width:1px;
+    classDef dataStore fill:#fcf,stroke:#333,stroke-width:1px;
+    classDef client fill:#cfc,stroke:#333,stroke-width:1px;
     
-    subgraph "Storage Layer"
-        FS
-        PG
-    end
+    Client[AI Client/Claude Desktop] --> |Requests| MCP[MCP Prompts Server]
     
-    subgraph "Integration Layer"
-        GH
-        FS2
-        MEM
-        SQL
-    end
+    MCP:::mainServer --> |Template Variables| Memory[MCP Memory Server]
+    MCP --> |File Operations| FS[MCP Filesystem Server]
+    MCP --> |Repository Access| GitHub[MCP GitHub Server]
+    MCP --> |Thought Process| Thinking[MCP Sequential Thinking]
+    MCP --> |Voice Output| ElevenLabs[MCP ElevenLabs Server]
+    MCP --> |Vector Search| PGAI[PostgreSQL AI Server]
     
-    subgraph "Additional Services"
-        EL[ElevenLabs MCP] --> |TTS| Claude
-        ST[Sequential Thinking MCP] --> |Reasoning| Claude
-        WEB[Web Search MCP] --> |Search Results| Claude
-    end
+    Memory:::serverNode --> |Stores| MemoryCache[(In-Memory Cache)]:::dataStore
+    FS:::serverNode --> |Accesses| FileSystem[(Local Files)]:::dataStore
+    GitHub:::serverNode --> |Connects to| GitHubAPI[(GitHub Repositories)]:::dataStore
+    Thinking:::serverNode --> |Processes| ThoughtFlow[(Thought Chains)]:::dataStore
+    ElevenLabs:::serverNode --> |Generates| Audio[(Voice Output)]:::dataStore
+    PGAI:::serverNode --> |Queries| VectorDB[(Vector Database)]:::dataStore
     
-    MCP <--> |Enhanced Capabilities| EL
-    MCP <--> |Enhanced Capabilities| ST
-    MCP <--> |Enhanced Capabilities| WEB
+    Client:::client
 ```
 
-### Data Flow between MCP Servers
-
-The following sequence diagram illustrates the typical data flow when multiple MCP servers are used together:
+#### Data Flow Architecture
 
 ```mermaid
 sequenceDiagram
-    participant Client as AI Client
-    participant Prompts as MCP Prompts
-    participant GitHub as GitHub MCP
-    participant FS as Filesystem MCP
-    participant DB as Database MCP
+    participant Client as AI Client/Claude
+    participant MCP as MCP Prompts Server
+    participant Mem as Memory Server
+    participant FS as Filesystem Server
+    participant GH as GitHub Server
+    participant PGAI as PostgreSQL AI
     
-    Client->>Prompts: Request template
-    Prompts->>Client: Return template
+    Client->>MCP: Request prompt by name
+    Note over MCP: Lookup prompt source
     
-    Client->>Prompts: Request with variables
-    Prompts->>GitHub: Get repository data
-    GitHub->>Prompts: Return repo data
-    Prompts->>FS: Get file content
-    FS->>Prompts: Return file content
-    Prompts->>DB: Query database
-    DB->>Prompts: Return query results
-    
-    Prompts->>Client: Completed prompt with context
-```
-
-### Integration Patterns
-
-There are several integration patterns that can be used with MCP Prompts:
-
-1. **Resource Enrichment**: MCP Prompts templates reference resources from other MCP servers
-
-```mermaid
-graph LR
-    Prompt[Prompt Template] -->|References| GH[GitHub Resources]
-    Prompt -->|References| FS[Filesystem Resources]
-    Prompt -->|References| DB[Database Resources]
-    
-    subgraph "MCP Prompts"
-        Prompt
+    alt Filesystem Storage
+        MCP->>FS: Fetch prompt file
+        FS-->>MCP: Return prompt content
+    else Database Storage
+        MCP->>PGAI: Query prompt by name
+        PGAI-->>MCP: Return prompt with embeddings
     end
     
-    subgraph "Other MCP Servers"
-        GH
-        FS
-        DB
-    end
-```
-
-2. **Chained Processing**: Output from one MCP server becomes input to another
-
-```mermaid
-graph LR
-    Client -->|1. Request| GH[GitHub MCP]
-    GH -->|2. Repo data| Prompts[MCP Prompts]
-    Prompts -->|3. Formatted prompt| ST[Sequential Thinking MCP]
-    ST -->|4. Analysis| Client
-```
-
-3. **Hub and Spoke**: MCP Prompts acts as a central hub for orchestrating multiple MCP servers
-
-```mermaid
-graph TD
-    Client --> Prompts
+    MCP->>Mem: Get template variables
+    Mem-->>MCP: Return variable values
     
-    Prompts -->|Resource requests| GH
-    Prompts -->|Resource requests| FS
-    Prompts -->|Resource requests| DB
-    Prompts -->|Resource requests| Web
-    
-    GH --> Prompts
-    FS --> Prompts
-    DB --> Prompts
-    Web --> Prompts
-    
-    Prompts --> Client
-    
-    subgraph "Hub"
-        Prompts[MCP Prompts]
+    alt GitHub Sync Enabled
+        MCP->>GH: Sync prompt changes
+        GH-->>MCP: Confirmation
     end
     
-    subgraph "Spokes"
-        GH[GitHub MCP]
-        FS[Filesystem MCP]
-        DB[Database MCP]
-        Web[Web Search MCP]
-    end
+    MCP->>Client: Return processed prompt
+    
+    Note over Client,MCP: Additional resource requests
+    
+    Client->>MCP: Request related resources
+    MCP->>Client: Return linked resources
 ```
 
-### Configuration Example
+#### Configuration for Multi-Server Setup
 
-Here's an example of how to configure multiple MCP servers in the Claude Desktop configuration:
+To enable integration with multiple MCP servers, you need to:
+
+1. Start the required MCP servers using Docker Compose:
+
+```bash
+docker compose -f docker/compose/docker-compose.base.yml -f docker/compose/docker-compose.integration.yml up -d
+```
+
+2. Configure your MCP client (such as Claude Desktop) with the appropriate server URLs:
 
 ```json
 {
   "mcpServers": {
     "prompts": {
-      "command": "npx",
-      "args": ["-y", "@sparesparrow/mcp-prompts"],
-      "env": {
-        "STORAGE_TYPE": "file",
-        "PROMPTS_DIR": "/path/to/prompts"
-      }
+      "transport": "http",
+      "url": "http://localhost:3003"
     },
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "your-token-here"
-      }
+    "memory": {
+      "transport": "http",
+      "url": "http://localhost:3020"
     },
     "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/files"]
+      "transport": "http",
+      "url": "http://localhost:3021"
     },
-    "postgres": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
+    "github": {
+      "transport": "http",
+      "url": "http://localhost:3022"
+    },
+    "sequential-thinking": {
+      "transport": "http",
+      "url": "http://localhost:3023"
+    },
+    "elevenlabs": {
+      "transport": "http",
+      "url": "http://localhost:3024"
     }
   }
 }
 ```
 
-### Docker Compose Integration
+#### Server-Specific Environment Variables
 
-For more complex integration scenarios, Docker Compose can be used to orchestrate multiple MCP servers:
+When integrating with other servers, the following environment variables can be set:
 
-```yaml
-version: '3'
-services:
-  mcp-prompts:
-    image: sparesparrow/mcp-prompts:latest
-    environment:
-      - STORAGE_TYPE=file
-      - PROMPTS_DIR=/app/data/prompts
-    volumes:
-      - prompts-data:/app/data
-    ports:
-      - "3003:3003"
-      
-  mcp-github:
-    image: node:alpine
-    command: npx -y @modelcontextprotocol/server-github
-    environment:
-      - GITHUB_PERSONAL_ACCESS_TOKEN=your-token-here
-    ports:
-      - "3004:3000"
-      
-  mcp-filesystem:
-    image: node:alpine
-    command: npx -y @modelcontextprotocol/server-filesystem /data
-    volumes:
-      - ./data:/data
-    ports:
-      - "3005:3000"
-      
-  mcp-postgres:
-    image: node:alpine
-    command: npx -y @modelcontextprotocol/server-postgres postgresql://postgres:postgres@db/mcp
-    depends_on:
-      - db
-    ports:
-      - "3006:3000"
-      
-  db:
-    image: postgres:14-alpine
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=mcp
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-      
-volumes:
-  prompts-data:
-  postgres-data:
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MCP_INTEGRATION` | Enable integration with other MCP servers | `false` |
+| `MCP_MEMORY_URL` | URL for the MCP Memory Server | `http://mcp-memory:3000` |
+| `MCP_FILESYSTEM_URL` | URL for the MCP Filesystem Server | `http://mcp-filesystem:3000` |
+| `MCP_GITHUB_URL` | URL for the MCP GitHub Server | `http://mcp-github:3000` |
+| `MCP_THINKING_URL` | URL for the MCP Sequential Thinking Server | `http://mcp-sequential-thinking:3000` |
+| `MCP_ELEVENLABS_URL` | URL for the MCP ElevenLabs Server | `http://mcp-elevenlabs:3000` |
+
+#### Integration Use Cases
+
+1. **Template Variables with Memory Server**:
+   - Store frequently used variables in the Memory Server
+   - Retrieve them dynamically when applying templates
+
+2. **Prompt Synchronization with GitHub Server**:
+   - Maintain a version-controlled repository of prompts
+   - Sync changes between local and remote repositories
+
+3. **Filesystem Management**:
+   - Access and manage prompt files across the filesystem
+   - Import/export prompts from different locations
+
+4. **Advanced Reasoning with Sequential Thinking**:
+   - Break down complex prompt processing into sequential steps
+   - Leverage chain-of-thought for step-by-step reasoning
+
+5. **Voice Feedback with ElevenLabs**:
+   - Convert prompt descriptions to speech
+   - Provide voice-based feedback on prompt selection
+
+6. **Vector Search with PostgreSQL AI**:
+   - Find semantically similar prompts
+   - Store and retrieve prompts with vector embeddings
+
+### Building and Publishing Docker Images
+
+To build and publish Docker images:
+
+```bash
+# Build all images with a specific tag
+./docker/scripts/build-and-publish.sh 1.0.0
+
+# Build just the production image
+./docker/scripts/docker-compose-manager.sh image -e production -t 1.0.0
+```
+
+### Data Persistence
+
+By default, Docker volumes are used for persistence:
+- `mcp-prompts-data`: For prompt storage
+- `mcp-prompts-postgres-data`: For PostgreSQL data
+
+To use a local directory instead:
+
+```bash
+docker run -p 3003:3003 -v /path/to/local/data:/app/data sparesparrow/mcp-prompts:latest
 ```
 
 ## Development
@@ -1173,102 +1155,118 @@ graph TD
 
 ## MCP Resources Integration
 
-The MCP Prompts Server can be integrated with other MCP servers to leverage their capabilities through resource sharing. This enables powerful workflows where prompts can be enriched with data from various sources.
+The MCP Prompts Server integrates with various MCP resource servers to enhance prompt capabilities. This integration allows prompts to access and incorporate external data, making AI interactions more contextual and powerful.
 
-### The `resources/list` Method
-
-The `resources/list` method provides a way to discover available data sources that can be incorporated into prompts. By implementing this method, the MCP Prompts Server becomes more versatile and can pull context from multiple sources.
-
-#### Use Cases for `resources/list`
-
-- **Discovery and Exploration of Contextual Data**: Clients can discover all available resources that might be relevant for a session
-- **Workflow Orchestration and Automation**: Dynamically determine available resources before proceeding with a workflow
-- **Enhanced User Interface Experience**: Display a menu of available resources for selection
-- **Integration with External Services**: Function as a discovery endpoint for external data sources
-
-#### Example Implementation
-
-```typescript
-// Implementation of resources/list method
-export async function resourcesList(params: any = {}): Promise<ResourceListResponse> {
-  const resources = await getAvailableResources();
-  
-  return {
-    resources: resources.map(resource => ({
-      id: resource.id,
-      name: resource.name,
-      description: resource.description,
-      type: resource.type,
-      uri: `resource://${resource.type}/${resource.id}`
-    }))
-  };
-}
-```
-
-### Using Resources in Prompts
-
-Resources can be referenced in prompts using the `@resource-uri` syntax, which gets expanded when the prompt is processed:
-
-```
-You are a development assistant analyzing the codebase at @resource://filesystem/path/to/project.
-
-Focus on the following files:
-@resource://github/repo/owner/name/path/to/file.js
-@resource://database/query/recent-commits
-```
-
-### Integration Pattern with Multiple MCP Servers
-
-When multiple MCP servers are configured together, they can share resources to provide a rich environment for AI assistance:
+### MCP Resources Architecture
 
 ```mermaid
-flowchart TD
-    A[AI Assistant] -->|Request| B[MCP Prompts Server]
-    B -->|resources/list| C[Resource Discovery]
-    C -->|Discovers| D[Filesystem Resources]
-    C -->|Discovers| E[GitHub Resources]
-    C -->|Discovers| F[Database Resources]
+graph TD
+    AI[AI Client] -->|Request| MCP[MCP Prompts Server]
     
-    B -->|apply_template| G[Template Processing]
-    G -->|Uses| D
-    G -->|Uses| E
-    G -->|Uses| F
+    subgraph "Resource Integration Layer"
+        MCP -->|Resource URIs| Parser[Resource URI Parser]
+        Parser -->|Dispatch Request| Router[Resource Router]
+        
+        Router -->|Filesystem Request| Filesystem[Filesystem Resource Handler]
+        Router -->|Memory Request| Memory[Memory Resource Handler]
+        Router -->|GitHub Request| GitHub[GitHub Resource Handler]
+        Router -->|Sequential Thinking| Thinking[Sequential Thinking Handler]
+        Router -->|Audio Generation| Audio[Audio Generation Handler]
+    end
     
-    G -->|Processed Prompt| A
+    Filesystem -->|Access Local Files| FS[(Local File System)]
+    Memory -->|Access Memory Store| Mem[(In-Memory Data Store)]
+    GitHub -->|API Requests| GH[(GitHub API)]
+    Thinking -->|Process Analysis| Think[(Reasoning Pipeline)]
+    Audio -->|Generate Speech| Sound[(Audio Output)]
+    
+    MCP -->|Enhanced Response| AI
+    
+    classDef primary fill:#f96,stroke:#333,stroke-width:2px
+    classDef resource fill:#bbf,stroke:#333,stroke-width:1px
+    classDef storage fill:#bfb,stroke:#333,stroke-width:1px
+    
+    class MCP,AI primary
+    class Parser,Router,Filesystem,Memory,GitHub,Thinking,Audio resource
+    class FS,Mem,GH,Think,Sound storage
 ```
 
-### Configuring Resource Integration
+### Resource URI Format
 
-To enable resource integration, configure your MCP Prompts server alongside other MCP servers in your `claude_desktop_config.json`:
+MCP Resources are referenced using a consistent URI format:
+
+```
+@resource-type:resource-path
+```
+
+Examples:
+- `@filesystem:/path/to/file.js` - Access a local file
+- `@memory:session/12345` - Retrieve data from memory
+- `@github:owner/repo/path/to/file` - Get content from a GitHub repository
+- `@sequential-thinking:analysis-1234` - Reference a reasoning chain
+- `@elevenlabs:text-to-speak` - Generate audio from text
+
+### Integration with Templates
+
+Templates can be enhanced with MCP resources to create dynamic, context-aware prompts:
 
 ```json
 {
-  "mcpServers": {
-    "prompts": {
-      "command": "npx",
-      "args": ["-y", "@sparesparrow/mcp-prompts"],
-      "env": {
-        "STORAGE_TYPE": "file",
-        "PROMPTS_DIR": "/path/to/prompts",
-        "ENABLE_RESOURCES": "true"
-      }
-    },
-    "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user/"]
-    },
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "your-token-here"
-      }
-    }
-  }
+  "name": "GitHub Repository Analysis",
+  "content": "# Analysis of {{repo_name}}\n\n## Repository Structure\n@github:{{owner}}/{{repo_name}}/structure\n\n## Key Files\n@github:{{owner}}/{{repo_name}}/{{main_branch}}/README.md\n@github:{{owner}}/{{repo_name}}/{{main_branch}}/package.json\n\n## Previous Analysis\n@memory:repos/{{repo_name}}/previous-analysis\n\n## Analysis Process\n@sequential-thinking:repo-analysis-{{repo_name}}",
+  "isTemplate": true,
+  "variables": ["repo_name", "owner", "main_branch"]
 }
 ```
 
-This configuration allows the prompts server to discover and use resources from both the filesystem and GitHub servers.
+### Available Resource Types
+
+| Resource Type | URI Format | MCP Server | Purpose |
+|---------------|------------|------------|---------|
+| `filesystem` | `@filesystem:/path` | @modelcontextprotocol/server-filesystem | Access local files |
+| `memory` | `@memory:key/subkey` | @modelcontextprotocol/server-memory | Store/retrieve data |
+| `github` | `@github:owner/repo/path` | @modelcontextprotocol/server-github | Access GitHub repositories |
+| `sequential-thinking` | `@sequential-thinking:id` | @modelcontextprotocol/server-sequential-thinking | Process complex reasoning |
+| `elevenlabs` | `@elevenlabs:text` | elevenlabs-mcp-server | Generate voice from text |
+
+### Resource Fallback Strategies
+
+For robust production use, implement fallback strategies when resources are unavailable:
+
+```mermaid
+graph TD
+    Request[Resource Request] --> Available{Resource Available?}
+    Available -->|Yes| Fetch[Fetch Resource]
+    Available -->|No| Cache{Cache Available?}
+    
+    Cache -->|Yes| UseCache[Use Cached Version]
+    Cache -->|No| Fallback{Fallback Defined?}
+    
+    Fallback -->|Yes| UseFallback[Use Fallback Content]
+    Fallback -->|No| Error[Return Error Message]
+    
+    Fetch --> Success{Success?}
+    Success -->|Yes| Return[Return Content]
+    Success -->|No| Cache
+    
+    UseCache --> Return
+    UseFallback --> Return
+    Error --> Return
+```
+
+### Setting Up MCP Resource Servers
+
+To enable resource integration, deploy the required MCP servers using Docker Compose:
+
+```bash
+# Start all resource servers
+docker/scripts/docker-compose-manager.sh up integration
+
+# Start specific resource servers
+docker/scripts/docker-compose-manager.sh up memory github
+```
+
+For detailed setup instructions for each resource server, refer to the [MCP Servers Documentation](https://github.com/modelcontextprotocol/servers).
 
 ## MCP Server Integration
 
@@ -1340,7 +1338,7 @@ graph LR
 
 ```mermaid
 sequenceDiagram
-    participant User as User/Client
+    participant User as User
     participant Orchestrator as Orchestrator Server
     participant Prompts as MCP Prompts Server
     participant Mermaid as Mermaid Diagram Server
@@ -1447,9 +1445,9 @@ To integrate the MCP Prompts Server with the Mermaid and Orchestrator servers, f
 3. **Set Up Docker Compose**:
    Create a `docker-compose.yml` file that includes all required servers:
    ```yaml
-   version: "3"
+   version: '3'
    services:
-     prompts:
+     mcp-prompts:
        image: sparesparrow/mcp-prompts:latest
        environment:
          - ENABLE_RESOURCES=true
@@ -1460,18 +1458,34 @@ To integrate the MCP Prompts Server with the Mermaid and Orchestrator servers, f
        ports:
          - "3003:3003"
      
-     mermaid:
-       image: mcp/mermaid-server:latest
+     mcp-github:
+       image: node:alpine
+       command: npx -y @modelcontextprotocol/server-github
+       environment:
+         - GITHUB_PERSONAL_ACCESS_TOKEN=your-token-here
        ports:
          - "3004:3000"
      
-     orchestrator:
-       image: mcp/orchestrator-server:latest
+     mcp-filesystem:
+       image: node:alpine
+       command: npx -y @modelcontextprotocol/server-filesystem /data
+       volumes:
+         - ./data:/data
        ports:
          - "3005:3000"
-       depends_on:
-         - prompts
-         - mermaid
+       
+     mcp-postgres:
+       image: postgres:14
+       environment:
+         - POSTGRES_USER=mcp
+         - POSTGRES_PASSWORD=mcp_password
+         - POSTGRES_DB=mcp_prompts
+       volumes:
+         - postgres-data:/var/lib/postgresql/data
+       
+ volumes:
+   prompts-data:
+   postgres-data:
    ```
 
 By integrating these servers, you can create powerful workflows that combine prompt management, orchestration, and visualization capabilities.
@@ -1709,7 +1723,7 @@ services:
       - POSTGRES_PASSWORD=mcp_password
       - POSTGRES_DB=mcp_prompts
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
       
   postgres-server:
     image: mcp/postgres-server:latest

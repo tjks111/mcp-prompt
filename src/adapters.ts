@@ -104,33 +104,21 @@ export class FileAdapter implements StorageAdapter {
     return this.listPrompts();
   }
 
-  async updatePrompt(id: string, data: Partial<Prompt>): Promise<Prompt> {
+  async updatePrompt(id: string, data: Partial<Prompt>): Promise<Prompt | void> {
     if (!this.connected) {
       throw new Error("File storage not connected");
     }
 
-    // First get the existing prompt
-    const existing = await this.getPrompt(id);
-    
-    // Prepare updated prompt
-    const updated = {
-      ...existing,
-      ...data,
-      id, // Keep original ID
-      updatedAt: new Date().toISOString(),
-      version: (existing.version || 1) + 1
-    };
-
-    try {
-      await fs.writeFile(
-        path.join(this.promptsDir, `${id}.json`),
-        JSON.stringify(updated, null, 2)
-      );
-      return updated;
-    } catch (error: any) {
-      console.error(`Error updating prompt ${id} in file:`, error);
-      throw error;
-    }
+    // Retrieve the existing prompt using the provided id
+    return this.getPrompt(id).then(existingPrompt => {
+      if (!existingPrompt) {
+        throw new Error(`Prompt not found: ${id}`);
+      }
+      // Merge existing prompt data with the updates (excluding id if present in data)
+      const updatedPrompt = { ...existingPrompt, ...data, id };
+      // Save the updated prompt; implementation-specific
+      return this.savePrompt(updatedPrompt);
+    });
   }
 
   async listPrompts(options?: ListPromptsOptions): Promise<Prompt[]> {
@@ -342,23 +330,21 @@ export class MemoryAdapter implements StorageAdapter {
     return this.listPrompts();
   }
 
-  async updatePrompt(id: string, data: Partial<Prompt>): Promise<Prompt> {
+  async updatePrompt(id: string, data: Partial<Prompt>): Promise<Prompt | void> {
     if (!this.connected) {
       throw new Error("Memory storage not connected");
     }
 
-    const existing = await this.getPrompt(id);
-    
-    const updated = {
-      ...existing,
-      ...data,
-      id, // Keep original ID
-      updatedAt: new Date().toISOString(),
-      version: (existing.version || 1) + 1
-    };
-
-    this.prompts.set(id, updated);
-    return Promise.resolve(updated);
+    // Retrieve the existing prompt using the provided id
+    return this.getPrompt(id).then(existingPrompt => {
+      if (!existingPrompt) {
+        throw new Error(`Prompt not found: ${id}`);
+      }
+      // Merge existing prompt data with the updates (excluding id if present in data)
+      const updatedPrompt = { ...existingPrompt, ...data, id };
+      // Save the updated prompt; implementation-specific
+      return this.savePrompt(updatedPrompt);
+    });
   }
 
   async listPrompts(options?: ListPromptsOptions): Promise<Prompt[]> {
@@ -639,59 +625,21 @@ export class PostgresAdapter implements StorageAdapter {
     return this.listPrompts();
   }
 
-  async updatePrompt(id: string, data: Partial<Prompt>): Promise<Prompt> {
+  async updatePrompt(id: string, data: Partial<Prompt>): Promise<Prompt | void> {
     if (!this.connected) {
       throw new Error("PostgreSQL storage not connected");
     }
 
-    // First get the existing prompt
-    const existing = await this.getPrompt(id);
-    
-    // Prepare updated prompt
-    const updated = {
-      ...existing,
-      ...data,
-      id, // Keep original ID
-      updatedAt: new Date().toISOString(),
-      version: (existing.version || 1) + 1
-    };
-
-    const client = await this.pool.connect();
-    try {
-      await client.query(`
-        UPDATE prompts SET
-          name = $1,
-          description = $2,
-          content = $3,
-          is_template = $4,
-          variables = $5,
-          tags = $6,
-          category = $7,
-          updated_at = $8,
-          version = $9,
-          metadata = $10
-        WHERE id = $11
-      `, [
-        updated.name,
-        updated.description || null,
-        updated.content,
-        updated.isTemplate || false,
-        updated.variables ? JSON.stringify(updated.variables) : null,
-        updated.tags || null,
-        updated.category || null,
-        updated.updatedAt,
-        updated.version,
-        updated.metadata ? JSON.stringify(updated.metadata) : null,
-        id
-      ]);
-      
-      return updated;
-    } catch (error) {
-      console.error(`Error updating prompt ${id} in PostgreSQL:`, error);
-      throw error;
-    } finally {
-      client.release();
-    }
+    // Retrieve the existing prompt using the provided id
+    return this.getPrompt(id).then(existingPrompt => {
+      if (!existingPrompt) {
+        throw new Error(`Prompt not found: ${id}`);
+      }
+      // Merge existing prompt data with the updates (excluding id if present in data)
+      const updatedPrompt = { ...existingPrompt, ...data, id };
+      // Save the updated prompt; implementation-specific
+      return this.savePrompt(updatedPrompt);
+    });
   }
 
   async listPrompts(options?: ListPromptsOptions): Promise<Prompt[]> {

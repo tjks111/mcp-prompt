@@ -4,17 +4,28 @@
 // Tell TypeScript to keep this as an ES module
 // @ts-ignore
 export {};
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { createStorageAdapter } from "./adapters.js";
-import { Prompt, ServerConfig, StorageAdapter } from "./interfaces/index.js";
+import { Prompt, ServerConfig, StorageAdapter } from "./interfaces.js";
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { FileStorageAdapter, MemoryStorageAdapter, PostgresStorageAdapter } from './adapters/index.js';
 import { startHttpServer } from './http-server.js';
+import { PromptService } from './prompt-service.js';
+import {
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
+  ListResourcesRequestSchema,
+  ListToolsRequestSchema,
+  RequestSchema,
+  Request,
+  Notification,
+  Result
+} from "@modelcontextprotocol/sdk/server/protocol.js";
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -23,7 +34,7 @@ const __dirname = dirname(__filename);
 // Configuration with defaults
 const DEFAULT_CONFIG: ServerConfig = {
   name: "mcp-prompts",
-  version: "1.0.0",
+  version: "1.2.38", // Set to the current package version
   storageType: "file",
   promptsDir: process.env.PROMPTS_DIR || path.join(process.cwd(), "prompts"),
   backupsDir: process.env.BACKUPS_DIR || path.join(process.cwd(), "backups"),
@@ -31,6 +42,9 @@ const DEFAULT_CONFIG: ServerConfig = {
   logLevel: (process.env.LOG_LEVEL || "info") as "debug" | "info" | "warn" | "error",
   httpServer: process.env.HTTP_SERVER === "true",
   host: process.env.HOST || "0.0.0.0",
+  enableSSE: process.env.ENABLE_SSE === "true",
+  ssePath: process.env.SSE_PATH || "/events",
+  corsOrigin: process.env.CORS_ORIGIN || "*",
   postgres: process.env.POSTGRES_CONNECTION_STRING 
     ? {
         connectionString: process.env.POSTGRES_CONNECTION_STRING,
@@ -116,6 +130,39 @@ function applyTemplate(template: string, variables: Record<string, string>): str
   });
 }
 
+// Custom request schemas
+const AddPromptRequestSchema = z.object({
+  method: z.literal("add_prompt"),
+  params: z.object({
+    name: z.string(),
+    content: z.string(),
+    description: z.string().optional(),
+    isTemplate: z.boolean().optional(),
+    variables: z.array(z.string()).optional(),
+    tags: z.array(z.string()).optional(),
+  })
+});
+
+const GetPromptByIdRequestSchema = z.object({
+  method: z.literal("get_prompt"),
+  params: z.object({
+    id: z.string(),
+  })
+});
+
+const UpdatePromptRequestSchema = z.object({
+  method: z.literal("update_prompt"),
+  params: z.object({
+    id: z.string(),
+    name: z.string().optional(),
+    content: z.string().optional(),
+    description: z.string().optional(),
+    isTemplate: z.boolean().optional(),
+    variables: z.array(z.string()).optional(),
+    tags: z.array(z.string()).optional(),
+  })
+});
+
 // Main function
 async function main() {
   try {
@@ -129,8 +176,11 @@ async function main() {
     // Initialize default prompts
     await initializeDefaultPrompts();
   
+    // Create prompt service
+    const promptService = new PromptService(storageAdapter);
+  
     // Create MCP server
-    const server = new McpServer(
+    const server = new Server(
       {
         name: DEFAULT_CONFIG.name,
         version: DEFAULT_CONFIG.version,
@@ -140,160 +190,27 @@ async function main() {
           resources: { subscribe: false },
           tools: { listChanged: false },
           prompts: { listChanged: false }
-        }
+        },
+        enforceStrictCapabilities: true // Ensure strict capability checking
       }
     );
     
-    // Define resources
-    const resourcesList = [
-      {
-        id: "prompt",
-        name: "Prompt",
-        description: "A prompt or template stored in the system",
-        resourcePattern: "prompt://{id}",
-        listPattern: "prompt://",
-      },
-      {
-        id: "templates",
-        name: "Templates",
-        description: "All available template prompts",
-        resourcePattern: "templates://",
-        listPattern: undefined,
+    // New registration using server.resource, server.tool, and server.prompt
+    server.resource("prompt", "prompt://{id}", async (uri, params) => {
+      const promptId = params?.id || uri.href.split('prompt://')[1];
+      const prompt = await storageAdapter.getPrompt(promptId);
+      if (!prompt) {
+        throw new Error(`Prompt not found: ${promptId}`);
       }
-    ];
+      return promptService.formatMcpPrompt(prompt, {});
+    });
 
-    // Register the resources/list method handler
-    server.tool(
-      "resources/list",
-      {},
-      async () => {
-        return {
-          type: "object",
-          object: {
-            resources: resourcesList
-          }
-        };
-      }
-    );
+    server.resource("templates", "templates://", async (uri) => {
+      const prompts = await storageAdapter.listPrompts({ isTemplate: true });
+      return { contents: prompts };
+    });
 
-    // Register the prompts/list method handler
-    server.tool(
-      "prompts/list",
-      {},
-      async () => {
-        const prompts = await storageAdapter.listPrompts();
-        return {
-          type: "object",
-          object: {
-          prompts: prompts.map(prompt => ({
-            id: prompt.id,
-            name: prompt.name,
-            description: prompt.description || "",
-            isTemplate: prompt.isTemplate || false
-          }))
-          }
-        };
-      }
-    );
-
-    // Register the tools/list method handler
-    server.tool(
-      "tools/list",
-      {},
-      async () => {
-        return {
-        type: "object",
-        object: {
-          tools: [
-            {
-              name: "add_prompt",
-              description: "Add a new prompt",
-              parameters: {
-                type: "object",
-                properties: {
-                  name: { type: "string" },
-                  content: { type: "string" },
-                  description: { type: "string", optional: true },
-                  isTemplate: { type: "boolean", optional: true },
-                  variables: { type: "array", items: { type: "string" }, optional: true },
-                  tags: { type: "array", items: { type: "string" }, optional: true }
-                },
-                required: ["name", "content"]
-              }
-            },
-            {
-              name: "get_prompt",
-              description: "Get a prompt by ID",
-              parameters: {
-                type: "object",
-                properties: {
-                  id: { type: "string" }
-                },
-                required: ["id"]
-              }
-            },
-            {
-              name: "update_prompt",
-              description: "Update a prompt",
-              parameters: {
-                type: "object",
-                properties: {
-                  id: { type: "string" },
-                  name: { type: "string", optional: true },
-                  content: { type: "string", optional: true },
-                  description: { type: "string", optional: true },
-                  isTemplate: { type: "boolean", optional: true },
-                  variables: { type: "array", items: { type: "string" }, optional: true },
-                  tags: { type: "array", items: { type: "string" }, optional: true }
-                },
-                required: ["id"]
-              }
-            },
-            {
-              name: "list_prompts",
-              description: "List all prompts with optional filtering",
-              parameters: {
-                type: "object",
-                properties: {
-                  isTemplate: { type: "boolean", optional: true },
-                  tags: { type: "array", items: { type: "string" }, optional: true },
-                  search: { type: "string", optional: true },
-                  limit: { type: "number", optional: true },
-                  offset: { type: "number", optional: true }
-                }
-              }
-            },
-            {
-              name: "delete_prompt",
-              description: "Delete a prompt",
-              parameters: {
-                type: "object",
-                properties: {
-                  id: { type: "string" }
-                },
-                required: ["id"]
-              }
-            },
-            {
-              name: "apply_template",
-              description: "Apply variables to a template",
-              parameters: {
-                type: "object",
-                properties: {
-                  id: { type: "string" },
-                  variables: { type: "object" }
-                },
-                required: ["id", "variables"]
-              }
-            }
-          ]
-        }};
-      }
-    );
-
-    // Register tool handlers
-    server.tool(
-      "add_prompt",
+    server.tool("add_prompt",
       {
         name: z.string(),
         content: z.string(),
@@ -303,45 +220,25 @@ async function main() {
         tags: z.array(z.string()).optional(),
       },
       async (params) => {
-        const prompt = await storageAdapter.savePrompt({
-          name: params.name,
-          content: params.content,
-          description: params.description,
-          isTemplate: params.isTemplate || false,
-          variables: params.variables || [],
-          tags: params.tags || [],
-        });
-        
-        return {
-          type: "object",
-          object: prompt,
-      };
-    }
-  );
+        await storageAdapter.savePrompt(params);
+        return { success: true };
+      }
+    );
 
-  server.tool(
-    "get_prompt",
-    {
+    server.tool("get_prompt",
+      {
         id: z.string(),
       },
       async (params) => {
-        try {
-          const prompt = await storageAdapter.getPrompt(params.id);
-          return {
-            type: "object",
-            object: prompt,
-          };
-        } catch (error) {
-        return {
-            type: "error",
-            error: `Prompt not found: ${params.id}`,
-          };
+        const prompt = await storageAdapter.getPrompt(params.id);
+        if (!prompt) {
+          throw new Error(`Prompt not found: ${params.id}`);
         }
+        return prompt;
       }
     );
-    
-    server.tool(
-      "update_prompt",
+
+    server.tool("update_prompt",
       {
         id: z.string(),
         name: z.string().optional(),
@@ -352,32 +249,13 @@ async function main() {
         tags: z.array(z.string()).optional(),
       },
       async (params) => {
-        try {
-          const updatedPrompt = await storageAdapter.updatePrompt(params.id, {
-            name: params.name,
-            content: params.content,
-            description: params.description,
-            isTemplate: params.isTemplate,
-            variables: params.variables,
-            tags: params.tags,
-          });
-      
-      return {
-            type: "object",
-            object: updatedPrompt,
-          };
-        } catch (error) {
-          return {
-            type: "error",
-            error: `Error updating prompt: ${error.message}`,
-          };
-        }
+        await storageAdapter.updatePrompt(params.id, params);
+        return { success: true };
       }
     );
-    
-  server.tool(
-    "list_prompts",
-    {
+
+    server.tool("list_prompts",
+      {
         isTemplate: z.boolean().optional(),
         tags: z.array(z.string()).optional(),
         search: z.string().optional(),
@@ -386,80 +264,59 @@ async function main() {
       },
       async (params) => {
         const prompts = await storageAdapter.listPrompts(params);
-        
-        return {
-          type: "object",
-          object: {
-            prompts,
-            total: prompts.length,
-          },
-        };
+        return { prompts, total: prompts.length };
       }
     );
-    
-    server.tool(
-      "delete_prompt",
+
+    server.tool("delete_prompt",
       {
         id: z.string(),
       },
       async (params) => {
-        try {
-          await storageAdapter.deletePrompt(params.id);
-          return {
-            type: "object",
-            object: { success: true },
-          };
-        } catch (error) {
-      return {
-            type: "error",
-            error: `Error deleting prompt: ${error.message}`,
-          };
-        }
+        await storageAdapter.deletePrompt(params.id);
+        return { success: true };
       }
     );
-    
-  server.tool(
-    "apply_template",
-    {
-      id: z.string(),
+
+    server.tool("apply_template",
+      {
+        id: z.string(),
         variables: z.record(z.string()),
       },
       async (params) => {
-        try {
-          const prompt = await storageAdapter.getPrompt(params.id);
-      
-      if (!prompt.isTemplate) {
-        return {
-              type: "error",
-              error: `Prompt is not a template: ${params.id}`,
-            };
-          }
-          
-          const content = applyTemplate(prompt.content, params.variables);
-      
-      return {
-            type: "object",
-            object: {
-              content,
-              originalPrompt: prompt,
-              appliedVariables: params.variables,
-            },
-          };
-        } catch (error) {
-          return {
-            type: "error",
-            error: `Error applying template: ${error.message}`,
-          };
+        const prompt = await storageAdapter.getPrompt(params.id);
+        if (!prompt) {
+          throw new Error(`Prompt not found: ${params.id}`);
         }
+        if (!prompt.isTemplate) {
+          throw new Error(`Prompt is not a template: ${params.id}`);
+        }
+        const content = applyTemplate(prompt.content, params.variables);
+        return {
+          content,
+          originalPrompt: prompt,
+          appliedVariables: params.variables,
+        };
       }
     );
+
+    server.prompt("review-code", { code: z.string() }, ({ code }) => ({
+      messages: [{
+        role: "user",
+        content: {
+          type: "text",
+          text: `Please review this code:\n\n${code}`
+        }
+      }]
+    }));
     
     // Start HTTP server if enabled
     if (DEFAULT_CONFIG.httpServer) {
-      startHttpServer(DEFAULT_CONFIG);
+      startHttpServer(DEFAULT_CONFIG, server);
     }
     
     // Connect to transport
+    // SSE transport will be set up in startHttpServer if enabled
     const transport = new StdioServerTransport();
     await server.connect(transport);
     

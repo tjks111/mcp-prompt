@@ -571,7 +571,7 @@ export interface ServerConfig {
   version: string;
   
   /** Storage type */
-  storageType: 'file' | 'postgres' | 'memory';
+  storageType: 'file' | 'postgres' | 'memory' | 'mdc';
   
   /** File storage directory */
   promptsDir: string;
