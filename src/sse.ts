@@ -6,15 +6,15 @@
  * following best practices.
  */
 
-import type { IncomingMessage, Server as HttpServer } from 'node:http';
-import { ServerResponse } from 'node:http';
-import EventEmitter from 'node:events';
 import {
   ServerConfig,
 } from './interfaces.js';
-import { SSEServerTransport} from '@modelcontextprotocol/sdk/server/sse.js';
-import  type { Server as MCPServer } from '@modelcontextprotocol/sdk/server/index.js';
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import type { Server as MCPServer } from '@modelcontextprotocol/sdk/server/index.js';
 import { Express } from 'express';
+import type { IncomingMessage, Server as HttpServer, ServerResponse } from 'node:http';
+import EventEmitter from 'node:events';
+import { Transport } from '@modelcontextprotocol/sdk/cjs/shared/transport.js';
 
 // Define the interfaces that were previously imported
 interface SseClient {
@@ -42,13 +42,9 @@ interface SseManagerOptions {
   messageHistory?: number;
 }
 
-interface SseOptions {
-  clientId?: string;
-  metadata?: Record<string, string>;
-  initialMessage?: any;
-}
-
 interface TransportImplementation {
+  connect: (transportType: string, options: any) => any;
+  disconnect: (transportType: string) => any;
   sendMessage: (message: any, clientId?: string) => boolean;
   getClients: () => string[];
 }
@@ -61,8 +57,9 @@ export class SseManager extends EventEmitter {
   private _options: SseManagerOptions;
   private _transportImpl: TransportImplementation | null = null;
   private sseTransport: SSEServerTransport | null = null;
-  
-  constructor(options: SseManagerOptions = {}) {
+  private static instance: SseManager | null = null;
+
+  private constructor(options: SseManagerOptions = {}) {
     super();
     this._options = {
       heartbeatInterval: options.heartbeatInterval || 30000,
@@ -71,7 +68,14 @@ export class SseManager extends EventEmitter {
       ...options
     };
   }
-  
+
+  static getInstance(options?: SseManagerOptions): SseManager {
+    if (!SseManager.instance) {
+      SseManager.instance = new SseManager(options);
+    }
+    return SseManager.instance;
+  }
+
   /**
    * Get SSE transport implementation that can be passed to MCP Server
    */
@@ -79,6 +83,25 @@ export class SseManager extends EventEmitter {
     if (!this._transportImpl) {
       // Create a transport implementation
       this._transportImpl = {
+        connect: async (transportType: string, options: any) => {
+          if (transportType === 'sse') {
+            return {
+              send: (message: any) => {
+                this.broadcast(message);
+              },
+              close: () => {
+                // No-op for SSE transport
+              }
+            };
+          }
+          throw new Error(`Unsupported transport type: ${transportType}`);
+        },
+        disconnect: async (transportType: string) => {
+          if (transportType === 'sse') {
+            return;
+          }
+          throw new Error(`Unsupported transport type: ${transportType}`);
+        },
         sendMessage: (message, clientId) => {
           if (clientId) {
             // Send to specific client
@@ -111,19 +134,14 @@ export class SseManager extends EventEmitter {
   /**
    * Get the SSE server transport that can be used with the MCP Server
    */
-  public getSseTransport(): SSEServerTransport {
-    if (!this.sseTransport) {
-      // Create a custom SSE transport with default endpoint
-      // Note: In newer versions, we need to provide endpoint and response 
-      // but the actual transport will be managed through our custom implementation
-      const endpoint = '/events';
-      const dummyResponse = new ServerResponse({} as IncomingMessage);
-      this.sseTransport = new SSEServerTransport(endpoint, dummyResponse);
-    }
-    
+  public get sseTransportInstance(): SSEServerTransport | null {
     return this.sseTransport;
   }
-  
+
+  public set sseTransportInstance(transport: SSEServerTransport | null) {
+    this.sseTransport = transport;
+  }
+
   /**
    * Handle a new client connection
    * @param req The HTTP request
@@ -384,7 +402,7 @@ let sseManager: SseManager | null = null;
  */
 export function getSseManager(options?: SseManagerOptions): SseManager {
   if (!sseManager) {
-    sseManager = new SseManager(options);
+    sseManager = SseManager.getInstance(options);
   }
   return sseManager;
 }
@@ -397,39 +415,34 @@ export function enableSseInHttpServer(
   httpServer: HttpServer,
   mcpServer?: MCPServer
 ): SseManager {
-  // Create or get the SSE manager
-  const manager = getSseManager();
-  
-  // Set up the SSE endpoint handler
+  const manager = getSseManager({
+    heartbeatInterval: 30000, // 30 seconds
+    clientTimeout: 60000,    // 60 seconds
+    messageHistory: 50
+  });
+
+  // Set up HTTP endpoint for SSE
   const ssePath = config.ssePath || '/events';
-  
-  // Handle SSE connections through the HTTP server
   httpServer.on('request', (req, res) => {
     if (req && req.url && req.url.startsWith(ssePath)) {
-      // Get client ID and metadata from query parameters
-      const url = new URL(req.url, `http://${req.headers.host}`);
-      const clientId = url.searchParams.get('clientId') || undefined;
-      const metadata: Record<string, string> = {};
-      
-      // Extract metadata from query parameters
-      for (const [key, value] of url.searchParams.entries()) {
-        if (key !== 'clientId') {
-          metadata[key] = value;
-        }
-      }
-      
-      // Handle the SSE connection
-      manager.handleConnection(req, res, { clientId, metadata });
+      manager.handleConnection(req, res);
     }
   });
-  
-  // If MCP server is provided, integrate with it 
+
+  // If MCP server is provided, integrate with it
   if (mcpServer) {
-    // With the latest SDK, we need to register our SSE transport with the server
-    // But we will let the server.connect() call handle this in index.ts
-    console.error('SSE manager initialized for MCP server');
+    // Register SSE transport with MCP server
+    mcpServer.connect({
+      type: 'sse',
+      start: () => Promise.resolve(),
+      send: (message: any) => {
+        manager.broadcast(message);
+        return Promise.resolve();
+      },
+      close: () => Promise.resolve()
+    } as unknown as Transport);
   }
-  
+
   return manager;
 }
 
@@ -455,6 +468,10 @@ export function setupSSE(app: Express, path: string) {
       clearInterval(keepAlive);
     });
   });
-} 
+}
 
-
+interface SseOptions {
+  clientId?: string;
+  metadata?: Record<string, string>;
+  initialMessage?: any;
+}

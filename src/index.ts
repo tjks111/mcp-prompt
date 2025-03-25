@@ -26,7 +26,6 @@ import {
   Notification,
   Result
 } from "@modelcontextprotocol/sdk/server/protocol.js";
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { promptSchemas } from './prompts.js';
 import { StorageConfig } from './interfaces.js';
 
