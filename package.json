@@ -1,6 +1,6 @@
 {
   "name": "@sparesparrow/mcp-prompts",
-  "version": "1.2.42",
+  "version": "1.2.43",
   "description": "An MCP server for managing and providing prompts and prompt templates",
   "type": "module",
   "bin": {
@@ -74,6 +74,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.7.0",
     "@modelcontextprotocol/server-postgres": "0.6.2",
+    "@sparesparrow/mcp-prompts": "^1.2.42",
     "cors": "^2.8.5",
     "eventsource": "^3.0.5",
     "express": "^5.0.1",

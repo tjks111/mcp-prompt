@@ -178,34 +178,26 @@ async function main() {
     // Initialize default prompts
     await initializeDefaultPrompts();
   
-    // Create prompt service
-    const promptService = new PromptService(storageAdapter);
-  
     // Create MCP server
     const server = new Server();
     
-    // Initialize storage and prompt service
-    const storage = createStorageAdapter(DEFAULT_CONFIG);
-    const promptService = new PromptService(storage);
-    await promptService.initialize();
-
     // Register prompt resources
     server.resource('prompts', {
       get: async ({ id }) => {
-        const prompt = await promptService.getPrompt(id);
+        const prompt = await storageAdapter.getPrompt(id);
         if (!prompt) {
           throw new Error(`Prompt not found: ${id}`);
         }
         return prompt;
       },
       list: async () => {
-        return promptService.listPrompts({});
+        return storageAdapter.listPrompts({});
       }
     });
 
     server.resource('templates', {
       list: async () => {
-        return promptService.listPrompts({ isTemplate: true });
+        return storageAdapter.listPrompts({ isTemplate: true });
       }
     });
 
@@ -214,7 +206,7 @@ async function main() {
       description: 'Create a new prompt',
       parameters: promptSchemas.create,
       handler: async ({ input }) => {
-        return promptService.createPrompt(input);
+        return storageAdapter.createPrompt(input);
       }
     });
 
@@ -223,7 +215,7 @@ async function main() {
       parameters: promptSchemas.update,
       handler: async ({ input }) => {
         const { id, ...updates } = input;
-        return promptService.updatePrompt(id, updates);
+        return storageAdapter.updatePrompt(id, updates);
       }
     });
 
@@ -231,7 +223,7 @@ async function main() {
       description: 'Delete a prompt',
       parameters: promptSchemas.delete,
       handler: async ({ input }) => {
-        await promptService.deletePrompt(input.id);
+        await storageAdapter.deletePrompt(input.id);
         return { success: true };
       }
     });
@@ -240,7 +232,7 @@ async function main() {
       description: 'List prompts with optional filtering',
       parameters: promptSchemas.list,
       handler: async ({ input }) => {
-        return promptService.listPrompts(input);
+        return storageAdapter.listPrompts(input);
       }
     });
 
@@ -251,7 +243,7 @@ async function main() {
         variables: 'object'
       },
       handler: async ({ input }) => {
-        const content = await promptService.applyTemplate(
+        const content = await storageAdapter.applyTemplate(
           input.id,
           input.variables as Record<string, string>
         );
@@ -266,7 +258,7 @@ async function main() {
         code: 'string'
       },
       handler: async ({ input }) => {
-        const content = await promptService.applyTemplate('code-review', {
+        const content = await storageAdapter.applyTemplate('code-review', {
           code: input.code
         });
         return { content };
@@ -283,7 +275,7 @@ async function main() {
         environment: 'string'
       },
       handler: async ({ input }) => {
-        const content = await promptService.applyTemplate('bug-report', input);
+        const content = await storageAdapter.applyTemplate('bug-report', input);
         return { content };
       }
     });
@@ -314,9 +306,9 @@ export async function createServer(config: StorageConfig) {
   const server = new Server();
   
   // Initialize storage and prompt service
-  const storage = createStorageAdapter(config);
-  const promptService = new PromptService(storage);
-  await promptService.initialize();
+  const storageAdapter = createStorageAdapter(config);
+  const promptService = new PromptService(storageAdapter);
+  await storageAdapter.initialize();
 
   // Register prompt resources
   server.resource('prompts', {
