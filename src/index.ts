@@ -183,13 +183,6 @@ async function main() {
     
     // Register prompt resources
     server.resource('prompts', {
-      get: async ({ id }) => {
-        const prompt = await storageAdapter.getPrompt(id);
-        if (!prompt) {
-          throw new Error(`Prompt not found: ${id}`);
-        }
-        return prompt;
-      },
       list: async () => {
         return storageAdapter.listPrompts({});
       }
