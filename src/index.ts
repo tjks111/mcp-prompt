@@ -182,17 +182,25 @@ async function main() {
     const server = new McpServer(DEFAULT_CONFIG);
     
     // Register prompt resources
-    server.resource('prompts', {
-      list: async () => {
-        return storageAdapter.listPrompts({});
+    server.resource(
+      'prompts',
+      new ResourceTemplate('prompts://{id}', { list: undefined }),
+      {
+        list: async () => {
+          return storageAdapter.listPrompts({});
+        }
       }
-    });
+    );
 
-    server.resource('templates', {
-      list: async () => {
-        return storageAdapter.listPrompts({ isTemplate: true });
+    server.resource(
+      'templates',
+      new ResourceTemplate('templates://{id}', { list: undefined }),
+      {
+        list: async () => {
+          return storageAdapter.listPrompts({ isTemplate: true });
+        }
       }
-    });
+    );
 
     // Register prompt management tools
     /*
@@ -310,103 +318,105 @@ export async function createServer(config: StorageConfig) {
   const promptService = new PromptService(storageAdapter);
   await promptService.initialize(); // Initialize the prompt service and connect storage
 
-  // Register prompt resources
-  /*
-  server.resource('prompts', {
-    list: async () => {
-      return promptService.listPrompts({});
-    }
-  });
+    // Register prompt resources
+    server.resource(
+      'prompts',
+      new ResourceTemplate('prompts://{id}', { list: undefined }),
+      {
+        list: async () => {
+          return storageAdapter.listPrompts({});
+        }
+      }
+    );
 
-  server.resource('templates', {
-    list: async () => {
-      return promptService.listPrompts({ isTemplate: true });
-    }
-  });
-  */
+    server.resource(
+      'templates',
+      new ResourceTemplate('templates://{id}', { list: undefined }),
+      {
+        list: async () => {
+          return storageAdapter.listPrompts({ isTemplate: true });
+        }
+      }
+    );
 
-  // Register prompt management tools
-  /*
-  server.tool('create_prompt', {
-    description: 'Create a new prompt',
-    parameters: promptSchemas.create,
-    handler: async ({ input }) => {
-      return promptService.createPrompt(input);
-    }
-  });
+    // Register prompt management tools
+    server.tool('create_prompt', {
+      description: 'Create a new prompt',
+      parameters: promptSchemas.create,
+      handler: async ({ input }) => {
+        return storageAdapter.createPrompt(input);
+      }
+    });
 
-  server.tool('update_prompt', {
-    description: 'Update an existing prompt',
-    parameters: promptSchemas.update,
-    handler: async ({ input }) => {
-      const { id, ...updates } = input;
-      return promptService.updatePrompt(id, updates);
-    }
-  });
+    server.tool('update_prompt', {
+      description: 'Update an existing prompt',
+      parameters: promptSchemas.update,
+      handler: async ({ input }) => {
+        const { id, ...updates } = input;
+        return storageAdapter.updatePrompt(id, updates);
+      }
+    });
 
-  server.tool('delete_prompt', {
-    description: 'Delete a prompt',
-    parameters: promptSchemas.delete,
-    handler: async ({ input }) => {
-      await promptService.deletePrompt(input.id);
-      return { success: true };
-    }
-  });
+    server.tool('delete_prompt', {
+      description: 'Delete a prompt',
+      parameters: promptSchemas.delete,
+      handler: async ({ input }) => {
+        await storageAdapter.deletePrompt(input.id);
+        return { success: true };
+      }
+    });
 
-  server.tool('list_prompts', {
-    description: 'List prompts with optional filtering',
-    parameters: promptSchemas.list,
-    handler: async ({ input }) => {
-      return promptService.listPrompts(input);
-    }
-  });
+    server.tool('list_prompts', {
+      description: 'List prompts with optional filtering',
+      parameters: promptSchemas.list,
+      handler: async ({ input }) => {
+        return storageAdapter.listPrompts(input);
+      }
+    });
 
-  server.tool('apply_template', {
-    description: 'Apply variables to a template prompt',
-    parameters: {
-      id: 'string',
-      variables: 'object'
-    },
-    handler: async ({ input }) => {
-      const content = await promptService.applyTemplate(
-        input.id,
-        input.variables as Record<string, string>
-      );
-      return { content };
-    }
-  });
-  */
+    server.tool('apply_template', {
+      description: 'Apply variables to a template prompt',
+      parameters: {
+        id: 'string',
+        variables: 'object'
+      },
+      handler: async ({ input }) => {
+        const content = await storageAdapter.applyTemplate(
+          input.id,
+          input.variables as Record<string, string>
+        );
+        return { content };
+      }
+    });
 
-  // Register some example prompts
-  /*
-  server.prompt('review-code', {
-    description: 'Review code changes and provide feedback',
-    parameters: {
-      code: 'string'
-    },
-    handler: async ({ input }) => {
-      const content = await promptService.applyTemplate('code-review', {
-        code: input.code
-      });
-      return { content };
-    }
-  });
+    // Register some example prompts
+    server.prompt('review-code', {
+      description: 'Review code changes and provide feedback',
+      parameters: {
+        code: 'string'
+      },
+      handler: async ({ input }) => {
+        const content = await storageAdapter.applyTemplate('code-review', {
+          code: input.code
+        });
+        return { content };
+      }
+    });
 
-  server.prompt('generate-bug-report', {
-    description: 'Generate a detailed bug report',
-    parameters: {
-      description: 'string',
-      steps: 'string',
-      expected: 'string',
-      actual: 'string',
-      environment: 'string'
-    },
-    handler: async ({ input }) => {
-      const content = await promptService.applyTemplate('bug-report', input);
-      return { content };
-    }
-  });
-  */
+    server.prompt('generate-bug-report', {
+      description: 'Generate a detailed bug report',
+      parameters: {
+        description: 'string',
+        steps: 'string',
+        expected: 'string',
+        actual: 'string',
+        environment: 'string'
+      },
+      handler: async ({ input }) => {
+        const content = await storageAdapter.applyTemplate('bug-report', input);
+        return { content };
+      }
+    });
 
   return server;
 }
