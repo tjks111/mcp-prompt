@@ -35,9 +35,11 @@ export async function startHttpServer(
   });
 
   // Set up SSE if enabled
+  /*
   if (config.enableSSE) {
     setupSSE(app, config.ssePath || '/events');
   }
+  */
 
   // Start the server
   await new Promise<void>((resolve, reject) => {
@@ -54,4 +56,4 @@ export async function startHttpServer(
       reject(error);
     }
   });
-} 
+}
