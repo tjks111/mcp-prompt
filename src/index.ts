@@ -4,7 +4,7 @@
 // Tell TypeScript to keep this as an ES module
 // @ts-ignore
 export {};
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import * as fs from "fs/promises";
@@ -36,7 +36,7 @@ const __dirname = dirname(__filename);
 // Configuration with defaults
 const DEFAULT_CONFIG: ServerConfig = {
   name: "mcp-prompts",
-  version: "1.2.38", // Set to the current package version
+  version: "1.2.43", // Set to the current package version
   storageType: "file",
   promptsDir: process.env.PROMPTS_DIR || path.join(process.cwd(), "prompts"),
   backupsDir: process.env.BACKUPS_DIR || path.join(process.cwd(), "backups"),
@@ -179,7 +179,7 @@ async function main() {
     await initializeDefaultPrompts();
   
     // Create MCP server
-    const server = new Server();
+    const server = new McpServer(DEFAULT_CONFIG);
     
     // Register prompt resources
     server.resource('prompts', {
@@ -303,12 +303,15 @@ main().catch((error) => {
 });
 
 export async function createServer(config: StorageConfig) {
-  const server = new Server();
+  const server = new McpServer({
+    name: config.name || DEFAULT_CONFIG.name,
+    version: config.version || DEFAULT_CONFIG.version
+  });
   
   // Initialize storage and prompt service
   const storageAdapter = createStorageAdapter(config);
   const promptService = new PromptService(storageAdapter);
-  await storageAdapter.initialize();
+  await promptService.initialize(); // Initialize the prompt service and connect storage
 
   // Register prompt resources
   server.resource('prompts', {
