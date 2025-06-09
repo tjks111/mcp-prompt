@@ -280,9 +280,11 @@ async function main() {
     */
 
     // Start HTTP server if enabled
+    /*
     if (DEFAULT_CONFIG.httpServer) {
       startHttpServer(DEFAULT_CONFIG, server);
     }
+    */
     
     // Connect to transport
     // SSE transport will be set up in startHttpServer if enabled
