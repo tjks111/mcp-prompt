@@ -182,6 +182,7 @@ async function main() {
     const server = new McpServer(DEFAULT_CONFIG);
     
     // Register prompt resources
+    /*
     server.resource('prompts', {
       list: async () => {
         return storageAdapter.listPrompts({});
@@ -193,8 +194,10 @@ async function main() {
         return storageAdapter.listPrompts({ isTemplate: true });
       }
     });
+    */
 
     // Register prompt management tools
+    /*
     server.tool('create_prompt', {
       description: 'Create a new prompt',
       parameters: promptSchemas.create,
@@ -243,8 +246,10 @@ async function main() {
         return { content };
       }
     });
+    */
 
     // Register some example prompts
+    /*
     server.prompt('review-code', {
       description: 'Review code changes and provide feedback',
       parameters: {
@@ -272,6 +277,7 @@ async function main() {
         return { content };
       }
     });
+    */
 
     // Start HTTP server if enabled
     if (DEFAULT_CONFIG.httpServer) {
@@ -307,6 +313,7 @@ export async function createServer(config: StorageConfig) {
   await promptService.initialize(); // Initialize the prompt service and connect storage
 
   // Register prompt resources
+  /*
   server.resource('prompts', {
     list: async () => {
       return promptService.listPrompts({});
@@ -318,8 +325,10 @@ export async function createServer(config: StorageConfig) {
       return promptService.listPrompts({ isTemplate: true });
     }
   });
+  */
 
   // Register prompt management tools
+  /*
   server.tool('create_prompt', {
     description: 'Create a new prompt',
     parameters: promptSchemas.create,
@@ -368,8 +377,10 @@ export async function createServer(config: StorageConfig) {
       return { content };
     }
   });
+  */
 
   // Register some example prompts
+  /*
   server.prompt('review-code', {
     description: 'Review code changes and provide feedback',
     parameters: {
@@ -397,6 +408,7 @@ export async function createServer(config: StorageConfig) {
       return { content };
     }
   });
+  */
 
   return server;
 }
