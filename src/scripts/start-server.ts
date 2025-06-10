@@ -27,9 +27,9 @@ async function main() {
 
     let transport: SSEServerTransport;
 
-    app.get("/sse", async (req, res) => {
+    app.get("/", async (req, res) => {
       console.log("SSE connection initiated.");
-      transport = new SSEServerTransport("/messages", res);
+      transport = new SSEServerTransport("/", res);
       try {
         await mcpServer.connect(transport);
         console.log("MCP Server connected to SSE transport.");
@@ -38,10 +38,10 @@ async function main() {
       }
     });
 
-    app.post("/messages", express.json(), async (req, res) => {
+    app.post("/", express.json(), async (req, res) => {
       if (!transport) {
-        console.error("POST to /messages received before SSE connection was established.");
-        return res.status(400).send("No active SSE transport. Please connect to /sse first.");
+        console.error("POST to / received before SSE connection was established.");
+        return res.status(400).send("No active SSE transport. Please connect to / first.");
       }
       console.log("Handling POST message.");
       await transport.handlePostMessage(req, res);
@@ -49,7 +49,7 @@ async function main() {
 
     app.listen(port, host, () => {
       console.log(`MCP Prompts Server listening on http://${host}:${port}`);
-      console.log("Connect to /sse to establish a connection.");
+      console.log("Connect to / to establish a connection.");
     }).on('error', (err: NodeJS.ErrnoException) => {
       console.error('Server failed to start:', err);
       process.exit(1);
