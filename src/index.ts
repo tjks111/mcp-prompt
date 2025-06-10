@@ -279,10 +279,8 @@ async function main() {
     });
     */
 
-    // Start HTTP server if enabled
-    if (DEFAULT_CONFIG.httpServer) {
-      startHttpServer(DEFAULT_CONFIG, server);
-    }
+  // The new start-server.ts script now handles the HTTP server setup.
+  // The old startHttpServer call is no longer needed here.
     
     // Connect to transport
     // SSE transport will be set up in startHttpServer if enabled

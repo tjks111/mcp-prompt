@@ -12,10 +12,7 @@
     "rootDir": "./src",
     "sourceMap": false,
     "declaration": true,
-    "baseUrl": ".",
-    "paths": {
-      "@modelcontextprotocol/sdk/*": ["node_modules/@modelcontextprotocol/sdk/dist/*"]
-    }
+    "baseUrl": "."
   },
   "include": [
     "src/**/*.ts"
