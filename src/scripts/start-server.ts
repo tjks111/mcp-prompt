@@ -107,6 +107,7 @@ async function main() {
       const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
       // Handle POST requests for client-to-server communication
+      /*
       app.post('/mcp', async (req: Request, res: Response) => {
         // Check for existing session ID
         const sessionId = req.headers['mcp-session-id'] as string | undefined;
@@ -150,8 +151,10 @@ async function main() {
         // Handle the request
         await transport.handleRequest(req, res, req.body);
       });
+      */
 
       // Reusable handler for GET and DELETE requests
+      /*
       const handleSessionRequest = async (req: express.Request, res: express.Response) => {
         const sessionId = req.headers['mcp-session-id'] as string | undefined;
         if (!sessionId || !transports[sessionId]) {
@@ -162,12 +165,17 @@ async function main() {
         const transport = transports[sessionId];
         await transport.handleRequest(req, res);
       };
+      */
 
       // Handle GET requests for server-to-client notifications via SSE
+      /*
       app.get('/mcp', handleSessionRequest);
+      */
 
       // Handle DELETE requests for session termination
+      /*
       app.delete('/mcp', handleSessionRequest);
+      */
 
       app.listen(port, host, () => {
         console.log(`MCP Streamable HTTP Server listening on http://${host}:${port}`);
